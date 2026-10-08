@@ -195,7 +195,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({ onOpenAd
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
           <Text style={[styles.metricCardLabel, { color: colors.textMuted }]}>TOTAL SPENT</Text>
           <Text style={[styles.metricCardVal, { color: colors.textPrimary }]}>{formatRupee(totalExpenses, true)}</Text>
-          <Text style={[styles.metricCardSub, { color: colors.textMuted }]}>{expenseCount} expenses & EMIs</Text>
+          <Text style={[styles.metricCardSub, { color: colors.textMuted }]}>{expenseCount} debits & EMIs</Text>
         </View>
 
         <View style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
@@ -231,8 +231,8 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({ onOpenAd
         <View style={styles.pillsGroup}>
           {[
             { key: 'ALL' as const, label: `All ${sortedTransactions.length}` },
-            { key: 'EXPENSES' as const, label: `Expenses ${expenseCount}` },
-            { key: 'INCOME' as const, label: `Income ${incomeCount}` },
+            { key: 'EXPENSES' as const, label: `Debits ${expenseCount}` },
+            { key: 'INCOME' as const, label: `Credits ${incomeCount}` },
             { key: 'SAVINGS' as const, label: `Savings & SIPs ${savingsCount}` },
           ].map((pill) => {
             const isSelected = activeFilter === pill.key;
@@ -369,7 +369,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({ onOpenAd
                               { color: isIncome ? '#15803D' : '#B91C1C' },
                             ]}
                           >
-                            {isIncome ? 'Credited' : 'Expense'}
+                            {isIncome ? 'Credit' : 'Debit'}
                           </Text>
                         </View>
                       </View>

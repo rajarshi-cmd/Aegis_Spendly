@@ -150,7 +150,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                         isSelected && { color: '#FFFFFF', fontWeight: '700' },
                       ]}
                     >
-                      {t}
+                      {t === 'OUTFLOW' ? 'Debit' : t === 'INFLOW' ? 'Credit' : 'Transfer'}
                     </Text>
                   </TouchableOpacity>
                 );

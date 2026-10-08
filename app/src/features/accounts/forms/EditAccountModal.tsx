@@ -133,7 +133,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
         credit_limit: isCreditCard ? parsedLimit : null,
         billing_cycle_cut_day: isCreditCard ? parsedCutDay : null,
         payment_due_day: isCreditCard ? parsedDueDay : null,
-        minimum_balance: !isCreditCard ? parsedMinBalance : null,
+        minimum_balance: !isCreditCard ? (parsedMinBalance ?? 0) : null,
         keep_track_ratio: isCreditCard ? keepTrackRatio : null,
       });
       onClose();

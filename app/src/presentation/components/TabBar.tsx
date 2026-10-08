@@ -9,13 +9,14 @@ interface TabBarProps {
   currentTab: ActiveTabKey;
   onSelectTab: (tab: ActiveTabKey) => void;
   deletedCount?: number;
+  onOpenProfile?: () => void;
 }
 
-export const TabBar: React.FC<TabBarProps> = ({ currentTab, onSelectTab, deletedCount = 0 }) => {
+export const TabBar: React.FC<TabBarProps> = ({ currentTab, onSelectTab, deletedCount = 0, onOpenProfile }) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const tabs: { key: ActiveTabKey; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number }[] = [
+  const tabs: { key: ActiveTabKey | 'PROFILE'; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number }[] = [
     { key: 'OVERVIEW', label: 'Overview', icon: 'grid-outline' },
     { key: 'TRANSACTIONS', label: 'Entries', icon: 'list-outline' },
     { key: 'CREDIT_CARDS', label: 'Cards', icon: 'card-outline' },
@@ -23,6 +24,7 @@ export const TabBar: React.FC<TabBarProps> = ({ currentTab, onSelectTab, deleted
     { key: 'PLAN_AHEAD', label: 'Plan', icon: 'calendar-outline' },
     { key: 'INVESTMENTS', label: 'Invest', icon: 'trending-up-outline' },
     { key: 'HISTORY', label: 'History', icon: 'reload-outline', badge: deletedCount > 0 ? deletedCount : undefined },
+    { key: 'PROFILE', label: 'Profile', icon: 'person-outline' },
   ];
 
   return (
@@ -43,7 +45,13 @@ export const TabBar: React.FC<TabBarProps> = ({ currentTab, onSelectTab, deleted
             <TouchableOpacity
               key={tab.key}
               style={styles.tabItem}
-              onPress={() => onSelectTab(tab.key)}
+              onPress={() => {
+                if (tab.key === 'PROFILE') {
+                  onOpenProfile?.();
+                } else {
+                  onSelectTab(tab.key);
+                }
+              }}
               activeOpacity={0.7}
             >
               <View

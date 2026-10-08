@@ -74,13 +74,13 @@ export const OnboardingScreen: React.FC = () => {
   const [banks, setBanks] = useState<BankDraft[]>([]);
   const [newBankName, setNewBankName] = useState('');
   const [newBankBalance, setNewBankBalance] = useState('');
-  const [newBankMinBalance, setNewBankMinBalance] = useState('0');
+  const [newBankMinBalance, setNewBankMinBalance] = useState('');
 
   // Step 3: Credit Cards (STARTS COMPLETELY EMPTY - No pre-added cards!)
   const [cards, setCards] = useState<CardDraft[]>([]);
   const [newCardName, setNewCardName] = useState('');
   const [newCardLimit, setNewCardLimit] = useState('');
-  const [newCardBalance, setNewCardBalance] = useState('0');
+  const [newCardBalance, setNewCardBalance] = useState('');
   const [newCardCutDay, setNewCardCutDay] = useState('15');
   const [newCardDueDay, setNewCardDueDay] = useState('5');
   const [newCardKeepTrackRatio, setNewCardKeepTrackRatio] = useState<number>(50); // Default 50%
@@ -162,7 +162,7 @@ export const OnboardingScreen: React.FC = () => {
     ]);
     setNewBankName('');
     setNewBankBalance('');
-    setNewBankMinBalance('0');
+    setNewBankMinBalance('');
   };
 
   const handleRemoveBank = (id: string) => {
@@ -215,7 +215,7 @@ export const OnboardingScreen: React.FC = () => {
     ]);
     setNewCardName('');
     setNewCardLimit('');
-    setNewCardBalance('0');
+    setNewCardBalance('');
     setNewCardCutDay('15');
     setNewCardDueDay('5');
     setNewCardKeepTrackRatio(50);
@@ -266,7 +266,7 @@ export const OnboardingScreen: React.FC = () => {
       ]);
       setNewBankName('');
       setNewBankBalance('');
-      setNewBankMinBalance('0');
+      setNewBankMinBalance('');
     }
     setCurrentStep('CARDS');
   };
@@ -297,7 +297,7 @@ export const OnboardingScreen: React.FC = () => {
       ]);
       setNewCardName('');
       setNewCardLimit('');
-      setNewCardBalance('0');
+      setNewCardBalance('');
       setNewCardCutDay('15');
       setNewCardDueDay('5');
       setNewCardKeepTrackRatio(50);
@@ -419,7 +419,7 @@ export const OnboardingScreen: React.FC = () => {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollRoot} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollRoot, { padding: isDesktop ? 16 : 10 }]} showsVerticalScrollIndicator={false}>
         <View style={[styles.container, { maxWidth: isDesktop ? 680 : '100%' }]}>
           {/* Header Stepper Navigation */}
           <View style={styles.stepperRow}>
@@ -467,7 +467,16 @@ export const OnboardingScreen: React.FC = () => {
           </View>
 
           {/* Main Content Card */}
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.borderSubtle,
+                padding: isDesktop ? 24 : 16,
+              },
+            ]}
+          >
             {/* STEP 1: IDENTITY & USERNAME */}
             {currentStep === 'IDENTITY' && (
               <View>
@@ -676,7 +685,7 @@ export const OnboardingScreen: React.FC = () => {
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>MINIMUM BALANCE REQUIRED (₹)</Text>
                       <TextInput
                         style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="e.g. 10000 (0 for zero balance)"
+                        placeholder="0 (Optional)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newBankMinBalance}
@@ -797,7 +806,7 @@ export const OnboardingScreen: React.FC = () => {
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT OUTSTANDING / SPENT (₹)</Text>
                       <TextInput
                         style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="0 (if fully paid)"
+                        placeholder="0 (Optional)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardBalance}
@@ -1025,12 +1034,12 @@ export const OnboardingScreen: React.FC = () => {
                     ]}
                     onPress={() => setIncomeType('SALARIED')}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
                         <View style={[styles.incomeIconBox, { backgroundColor: '#DCFCE7' }]}>
                           <Ionicons name="briefcase-outline" size={18} color="#15803D" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
                             Salaried Employee (Regular Monthly Inflow)
                           </Text>
@@ -1058,12 +1067,12 @@ export const OnboardingScreen: React.FC = () => {
                     ]}
                     onPress={() => setIncomeType('OTHER')}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
                         <View style={[styles.incomeIconBox, { backgroundColor: '#EDE9FE' }]}>
                           <Ionicons name="cash-outline" size={18} color="#7C3AED" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
                             Freelance / Variable Income / Other Payments
                           </Text>
@@ -1148,7 +1157,7 @@ export const OnboardingScreen: React.FC = () => {
                         Flexible Inflow Mode Active
                       </Text>
                       <Text style={[styles.guidanceSub, { color: '#166534' }]}>
-                        Whenever you receive client payouts, freelance fees, or dividends, simply tap '+ Add Entry' in the top header and record a 'Deposit / Inflow' to your account.
+                        Whenever you receive client payouts, freelance fees, or dividends, simply tap '+ Add Entry' in the top header and record a 'Credit / Inflow' to your account.
                       </Text>
                     </View>
                   </View>
@@ -1342,7 +1351,7 @@ export const OnboardingScreen: React.FC = () => {
                         onPress={() => handleSelectPreset(p.id)}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
                             <Ionicons
                               name={p.icon as any}
                               size={18}
@@ -1351,7 +1360,7 @@ export const OnboardingScreen: React.FC = () => {
                             <Text
                               style={[
                                 styles.presetTitle,
-                                { color: isSelected ? colors.primary : colors.textPrimary },
+                                { color: isSelected ? colors.primary : colors.textPrimary, flexShrink: 1 },
                               ]}
                             >
                               {p.title}
@@ -1550,28 +1559,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
+    maxWidth: '100%',
   },
   stepIndicatorItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   stepDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepDotText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
   },
   stepConnector: {
-    width: 20,
+    width: 14,
     height: 2,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
   },
   card: {
     borderRadius: 16,

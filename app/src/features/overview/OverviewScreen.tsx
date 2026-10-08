@@ -394,7 +394,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                           { color: isIncome ? '#15803D' : '#B91C1C' },
                         ]}
                       >
-                        {isIncome ? 'Credited' : 'Expense'}
+                        {isIncome ? 'Credit' : 'Debit'}
                       </Text>
                     </View>
                   </View>

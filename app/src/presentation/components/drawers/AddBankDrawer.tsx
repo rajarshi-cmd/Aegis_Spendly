@@ -33,7 +33,7 @@ export const AddBankDrawer: React.FC<AddBankDrawerProps> = ({
   const handleSave = async () => {
     if (!bankName.trim()) return;
     const balNum = parseFloat(balance.replace(/[^0-9.]/g, '')) || 0;
-    const minNum = parseFloat(minBalance.replace(/[^0-9.]/g, '')) || 5000;
+    const minNum = parseFloat(minBalance.replace(/[^0-9.]/g, '')) || 0;
 
     setLoading(true);
     try {
@@ -112,7 +112,7 @@ export const AddBankDrawer: React.FC<AddBankDrawerProps> = ({
                     <Text style={[styles.currencySymbol, { color: colors.textMuted }]}>₹</Text>
                     <TextInput
                       style={[styles.currencyInput, { color: colors.textPrimary }]}
-                      placeholder="10000"
+                      placeholder="0 (Optional)"
                       placeholderTextColor={colors.textMuted}
                       keyboardType="numeric"
                       value={minBalance}

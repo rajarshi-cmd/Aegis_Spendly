@@ -123,7 +123,7 @@ export const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Segmented Switcher: Expense vs Salary credited */}
+            {/* Segmented Switcher: Debit vs Credit */}
             <View style={[styles.toggleContainer, { backgroundColor: colors.background }]}>
               <TouchableOpacity
                 style={[
@@ -150,7 +150,7 @@ export const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
                     { color: entryType === 'EXPENSE' ? colors.danger : colors.textMuted },
                   ]}
                 >
-                  Expense
+                  Debit
                 </Text>
               </TouchableOpacity>
 
@@ -179,7 +179,7 @@ export const AddEntryDrawer: React.FC<AddEntryDrawerProps> = ({
                     { color: entryType === 'INCOME' ? colors.success : colors.textMuted },
                   ]}
                 >
-                  Salary credited
+                  Credit
                 </Text>
               </TouchableOpacity>
             </View>

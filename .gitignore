@@ -13,10 +13,14 @@ app/web-build/
 expo-env.d.ts
 app/expo-env.d.ts
 
-# Large archives and temporary archives
+# Large archives and temporary binaries
 *.zip
 *.tar.gz
 *.7z
+*.exe
+*.tmp
+*.bat
+aehd_extracted/
 
 # Logs & Debug
 npm-debug.*

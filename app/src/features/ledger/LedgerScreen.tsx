@@ -177,8 +177,8 @@ export const LedgerScreen: React.FC = () => {
       <View style={styles.segmentContainer}>
         {[
           { label: 'All Movements', val: 'ALL' as const },
-          { label: 'Expenses', val: 'OUTFLOW' as const },
-          { label: 'Income', val: 'INFLOW' as const },
+          { label: 'Debits', val: 'OUTFLOW' as const },
+          { label: 'Credits', val: 'INFLOW' as const },
         ].map((seg) => {
           const isSelected = typeFilter === seg.val;
           return (

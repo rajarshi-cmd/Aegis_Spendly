@@ -206,6 +206,7 @@ const MainNavigator: React.FC = () => {
             currentTab={activeTab}
             onSelectTab={setActiveTab}
             deletedCount={deletedTransactions.length}
+            onOpenProfile={() => setIsProfileOpen(true)}
           />
         </View>
       )}
