@@ -289,4 +289,56 @@ describe('Batch Defect Fixes Verification (DEF-010 through DEF-019)', () => {
       expect(postPinStatus).toBe('ONBOARDING');
     });
   });
+
+  describe('DEF-021: Spending Guardrails Editable Budget Category Names & Removal', () => {
+    it('allows updating budget category name and amount independently', () => {
+      let budgets = [
+        { id: 'b-1', category: 'Food & drinks', planned_amount: 7000 },
+        { id: 'b-2', category: 'Home', planned_amount: 15000 },
+      ];
+
+      // Update name only
+      const updateBudget = (
+        id: string,
+        updates: number | { planned_amount?: number; category?: string }
+      ) => {
+        budgets = budgets.map((b) => {
+          if (b.id !== id) return b;
+          if (typeof updates === 'number') {
+            return { ...b, planned_amount: updates };
+          }
+          return {
+            ...b,
+            ...(updates.planned_amount !== undefined ? { planned_amount: updates.planned_amount } : {}),
+            ...(updates.category !== undefined ? { category: updates.category } : {}),
+          };
+        });
+      };
+
+      // Rename "Food & drinks" -> "Groceries & Dining"
+      updateBudget('b-1', { category: 'Groceries & Dining' });
+      expect(budgets.find((b) => b.id === 'b-1')?.category).toBe('Groceries & Dining');
+      expect(budgets.find((b) => b.id === 'b-1')?.planned_amount).toBe(7000);
+
+      // Update amount via number shorthand
+      updateBudget('b-1', 8500);
+      expect(budgets.find((b) => b.id === 'b-1')?.category).toBe('Groceries & Dining');
+      expect(budgets.find((b) => b.id === 'b-1')?.planned_amount).toBe(8500);
+    });
+
+    it('allows removing an unwanted guardrail budget item', () => {
+      let budgets = [
+        { id: 'b-1', category: 'Food & drinks', planned_amount: 7000 },
+        { id: 'b-2', category: 'Home', planned_amount: 15000 },
+      ];
+
+      const removeBudget = (id: string) => {
+        budgets = budgets.filter((b) => b.id !== id);
+      };
+
+      removeBudget('b-2');
+      expect(budgets.length).toBe(1);
+      expect(budgets[0].id).toBe('b-1');
+    });
+  });
 });

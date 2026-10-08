@@ -158,6 +158,21 @@
 
 ---
 
+### DEF-021: Spending Guardrails Planned Budgets Lack Category Renaming & Deletion Capability
+
+* **Defect ID:** `DEF-021` / [GitHub #22](https://github.com/rajarshi-cmd/Aegis_Spendly/issues/22)
+* **Module:** Plan Ahead -> Spending Guardrails & Budgets
+* **Severity:** Medium
+* **Status:** 🟢 Resolved
+* **Symptom:** In the Spending Guardrails section, users could only adjust budget amounts via -/+ ₹500 sliders, but the category names (e.g. *Food & drinks*, *Home*) were static text and could not be edited or removed.
+* **Resolution:**
+  1. In `PlanAheadScreen.tsx`, clicking "Edit" renders an in-place `TextInput` for each category name, enabling real-time renaming.
+  2. Added a red trash icon button in Edit mode, calling `removePlannedBudget(id)` to delete unwanted guardrails.
+  3. In `PlanAheadDrawer.tsx`, custom budget item names are honored (`name.trim() || category`).
+  4. In `useFinanceData.tsx`, updated `updatePlannedBudget` to accept `{ planned_amount?: number; category?: string }` and added `removePlannedBudget(id)`.
+
+---
+
 ## 💡 Future Suggestions & Proposals (Post-Alpha Review)
 
 ### SUG-001 (GitHub Issue #20): Month & Year Granularity Option for Past Historical Transaction Entries

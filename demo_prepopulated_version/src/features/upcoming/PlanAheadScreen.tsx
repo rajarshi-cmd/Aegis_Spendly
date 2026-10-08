@@ -25,6 +25,7 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
     pastCommitments,
     plannedBudgets,
     updatePlannedBudget,
+    removePlannedBudget,
     payObligation,
     undoPayObligation,
     skipObligation,
@@ -78,15 +79,18 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
   const usedBudgets = useMemo(() => {
     const map: Record<string, number> = {};
     plannedBudgets.forEach((b) => {
+      const bCat = (b.category || '').toLowerCase().trim();
       const sum = transactions
         .filter(
           (t) =>
             t.type === 'OUTFLOW' &&
             !isOpeningBalance(t) &&
-            (t.category || '').toLowerCase() === b.category.toLowerCase() &&
+            ((t.category || '').toLowerCase().trim() === bCat ||
+              (t.description || '').toLowerCase().includes(bCat)) &&
             (!activeMonth || activeMonth.toLowerCase() === 'all months' || isDateInMonth(t.timestamp, activeMonth))
         )
         .reduce((s, t) => s + t.amount, 0);
+      map[b.id] = sum;
       map[b.category] = sum;
     });
     return map;
@@ -406,14 +410,33 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
 
           <View style={styles.budgetList}>
             {plannedBudgets.map((b) => {
-              const used = usedBudgets[b.category] || 0;
+              const used = usedBudgets[b.id] ?? usedBudgets[b.category] ?? 0;
               const pct = b.planned_amount > 0 ? Math.min(100, Math.round((used / b.planned_amount) * 100)) : 0;
               const isOver = pct > 90;
 
               return (
                 <View key={b.id} style={styles.budgetItem}>
                   <View style={styles.budgetTopRow}>
-                    <Text style={[styles.budgetName, { color: colors.textPrimary }]}>{b.category}</Text>
+                    {isEditingBudgets ? (
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+                        <TextInput
+                          style={[
+                            styles.budgetNameInput,
+                            {
+                              color: colors.textPrimary,
+                              borderColor: colors.border,
+                              backgroundColor: colors.background,
+                            },
+                          ]}
+                          value={b.category}
+                          onChangeText={(txt) => updatePlannedBudget(b.id, { category: txt })}
+                          placeholder="Budget name..."
+                          placeholderTextColor={colors.textMuted}
+                        />
+                      </View>
+                    ) : (
+                      <Text style={[styles.budgetName, { color: colors.textPrimary }]}>{b.category}</Text>
+                    )}
                     <Text style={[styles.budgetValues, { color: colors.textSecondary }]}>
                       {formatRupee(used)} / {formatRupee(b.planned_amount)}
                     </Text>
@@ -431,7 +454,7 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
                     />
                   </View>
 
-                  {/* DEF-012: Interactive Slider / Stepper Controls when Editing */}
+                  {/* Interactive Slider / Stepper Controls & Delete when Editing */}
                   {isEditingBudgets && (
                     <View style={styles.budgetSliderRow}>
                       <TouchableOpacity
@@ -459,6 +482,13 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
                         onPress={() => updatePlannedBudget(b.id, b.planned_amount + 500)}
                       >
                         <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>+ ₹500</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.deleteBudgetBtn, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
+                        onPress={() => removePlannedBudget(b.id)}
+                      >
+                        <Ionicons name="trash-outline" size={15} color="#DC2626" />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -918,6 +948,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
     padding: 0,
+  },
+  budgetNameInput: {
+    fontSize: 13,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flex: 1,
+  },
+  deleteBudgetBtn: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBackdrop: {
     flex: 1,

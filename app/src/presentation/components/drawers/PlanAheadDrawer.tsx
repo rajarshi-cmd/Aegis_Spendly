@@ -111,8 +111,9 @@ export const PlanAheadDrawer: React.FC<PlanAheadDrawerProps> = ({
           notes: `${sipType} SIP • ${months} months commitment`,
         });
       } else if (activeTab === 'BUDGET') {
+        const finalCategory = name.trim() || category;
         onSubmitBudget({
-          category,
+          category: finalCategory,
           planned_amount: num,
         });
       }

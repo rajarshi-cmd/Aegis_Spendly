@@ -161,7 +161,11 @@ export interface FinanceDataContextType {
   sealMonth: () => void;
   unsealMonth: () => void;
   addPlannedBudget: (budget: Omit<PlannedBudget, 'id'>) => void;
-  updatePlannedBudget: (id: string, planned_amount: number) => void;
+  updatePlannedBudget: (
+    id: string,
+    updates: number | { planned_amount?: number; category?: string }
+  ) => void;
+  removePlannedBudget: (id: string) => void;
   generatePdfReport: (period: DateRange) => Promise<string>;
   syncConfig: SyncScheduleConfig;
   updateSyncConfig: (partial: Partial<SyncScheduleConfig>) => void;
@@ -649,9 +653,32 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   };
 
-  const updatePlannedBudget = (id: string, planned_amount: number) => {
+  const updatePlannedBudget = (
+    id: string,
+    updates: number | { planned_amount?: number; category?: string }
+  ) => {
     setPlannedBudgets((prev) => {
-      const next = prev.map((b) => (b.id === id ? { ...b, planned_amount } : b));
+      const next = prev.map((b) => {
+        if (b.id !== id) return b;
+        if (typeof updates === 'number') {
+          return { ...b, planned_amount: updates };
+        }
+        return {
+          ...b,
+          ...(updates.planned_amount !== undefined ? { planned_amount: updates.planned_amount } : {}),
+          ...(updates.category !== undefined ? { category: updates.category } : {}),
+        };
+      });
+      try {
+        kvStorage.setItem(PLANNED_BUDGETS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const removePlannedBudget = (id: string) => {
+    setPlannedBudgets((prev) => {
+      const next = prev.filter((b) => b.id !== id);
       try {
         kvStorage.setItem(PLANNED_BUDGETS_STORAGE_KEY, JSON.stringify(next));
       } catch (e) {}
@@ -820,6 +847,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         unsealMonth,
         addPlannedBudget,
         updatePlannedBudget,
+        removePlannedBudget,
         generatePdfReport,
         syncConfig,
         updateSyncConfig,
