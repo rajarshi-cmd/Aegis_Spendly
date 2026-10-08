@@ -66,6 +66,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const [minimumBalance, setMinimumBalance] = useState<string>(
     account.minimum_balance?.toString() || ''
   );
+  const [keepTrackRatio, setKeepTrackRatio] = useState<number>(account.keep_track_ratio || 50);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
       setBillingCutDay(account.billing_cycle_cut_day?.toString() || '');
       setPaymentDueDay(account.payment_due_day?.toString() || '');
       setMinimumBalance(account.minimum_balance?.toString() || '');
+      setKeepTrackRatio(account.keep_track_ratio || 50);
     }
   }, [account]);
 
@@ -132,6 +134,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
         billing_cycle_cut_day: isCreditCard ? parsedCutDay : null,
         payment_due_day: isCreditCard ? parsedDueDay : null,
         minimum_balance: !isCreditCard ? parsedMinBalance : null,
+        keep_track_ratio: isCreditCard ? keepTrackRatio : null,
       });
       onClose();
     } catch (err: any) {
@@ -226,6 +229,61 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
                         placeholder="e.g. 5 (1-31)"
                         placeholderTextColor={colors.textMuted}
                       />
+                    </View>
+                  </View>
+
+                  {/* Target Utilization (Keep Track Ratio) Slider */}
+                  <View style={{ marginTop: 14, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.background }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textPrimary }}>
+                        Target Keep Track Ratio
+                      </Text>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.primaryLight }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary }}>{keepTrackRatio}%</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                      Amber light triggers halfway to this ceiling (Safe: 0%-{Math.round(keepTrackRatio * 0.5)}%, Amber: {Math.round(keepTrackRatio * 0.5)}%-{keepTrackRatio}%, Red: &gt;{keepTrackRatio}%)
+                    </Text>
+                    {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="5"
+                        value={keepTrackRatio}
+                        onChange={(e: any) => setKeepTrackRatio(Number(e.target.value))}
+                        style={{
+                          width: '100%',
+                          marginTop: '10px',
+                          height: '8px',
+                          borderRadius: '4px',
+                          background: `linear-gradient(to right, #10B981 0%, #10B981 ${Math.round(keepTrackRatio * 0.5)}%, #F59E0B ${Math.round(keepTrackRatio * 0.5)}%, #F59E0B ${keepTrackRatio}%, #EF4444 ${keepTrackRatio}%, #EF4444 100%)`,
+                          outline: 'none',
+                          cursor: 'pointer',
+                        }}
+                      />
+                    ) : null}
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                      {[30, 40, 50, 60, 75].map((pct) => (
+                        <TouchableOpacity
+                          key={pct}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 5,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: keepTrackRatio === pct ? colors.primary : colors.borderSubtle,
+                            backgroundColor: keepTrackRatio === pct ? colors.primary : colors.surface,
+                            alignItems: 'center',
+                          }}
+                          onPress={() => setKeepTrackRatio(pct)}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: keepTrackRatio === pct ? '#FFFFFF' : colors.textPrimary }}>
+                            {pct}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   </View>
                 </>

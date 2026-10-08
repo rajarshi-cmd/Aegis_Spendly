@@ -29,18 +29,14 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
     const trimmed = sql.trim().toUpperCase();
 
     if (trimmed.startsWith('INSERT INTO ACCOUNTS')) {
-      const [id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color_or_created, last4_or_updated, created_at, updated_at] = params;
-      // Handle both 10-param and 12-param signatures
-      let card_color: any = null;
-      let last4: any = null;
-      let created = created_at;
-      let updated = updated_at;
-      if (params.length === 12) {
-        card_color = card_color_or_created;
-        last4 = last4_or_updated;
+      let id: any, name: any, type: any, balance: any, credit_limit: any, billing_cycle_cut_day: any, payment_due_day: any, minimum_balance: any, keep_track_ratio: any = null, card_color: any = null, last4: any = null, created_at: any, updated_at: any;
+
+      if (params.length === 13) {
+        [id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, keep_track_ratio, card_color, last4, created_at, updated_at] = params;
+      } else if (params.length === 12) {
+        [id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at] = params;
       } else {
-        created = card_color_or_created;
-        updated = last4_or_updated;
+        [id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, created_at, updated_at] = params;
       }
 
       this.store.accounts.push({
@@ -52,10 +48,11 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
         billing_cycle_cut_day,
         payment_due_day,
         minimum_balance: minimum_balance ?? null,
+        keep_track_ratio: keep_track_ratio ?? null,
         card_color: card_color ?? null,
         last4: last4 ?? null,
-        created_at: created,
-        updated_at: updated,
+        created_at,
+        updated_at,
       });
       return { changes: 1, lastInsertRowId: this.store.accounts.length };
     }
@@ -151,7 +148,12 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
         acc.billing_cycle_cut_day = params[2];
         acc.payment_due_day = params[3];
         acc.minimum_balance = params[4];
-        if (params.length >= 9) {
+        if (params.length === 10) {
+          acc.keep_track_ratio = params[5];
+          acc.card_color = params[6];
+          acc.last4 = params[7];
+          acc.updated_at = params[8];
+        } else if (params.length === 9) {
           acc.card_color = params[5];
           acc.last4 = params[6];
           acc.updated_at = params[7];

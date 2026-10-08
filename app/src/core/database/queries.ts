@@ -20,18 +20,18 @@ export { generateUUID };
 
 export async function getAllAccounts(db: DatabaseExecutor): Promise<Account[]> {
   const rows = await db.getAll<any>(
-    `SELECT id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at 
-     FROM accounts ORDER BY created_at ASC;`
+    `SELECT * FROM accounts ORDER BY created_at ASC;`
   );
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     type: r.type,
     balance: Number(r.balance),
-    credit_limit: r.credit_limit !== null ? Number(r.credit_limit) : null,
-    billing_cycle_cut_day: r.billing_cycle_cut_day !== null ? Number(r.billing_cycle_cut_day) : null,
-    payment_due_day: r.payment_due_day !== null ? Number(r.payment_due_day) : null,
+    credit_limit: r.credit_limit !== null && r.credit_limit !== undefined ? Number(r.credit_limit) : null,
+    billing_cycle_cut_day: r.billing_cycle_cut_day !== null && r.billing_cycle_cut_day !== undefined ? Number(r.billing_cycle_cut_day) : null,
+    payment_due_day: r.payment_due_day !== null && r.payment_due_day !== undefined ? Number(r.payment_due_day) : null,
     minimum_balance: r.minimum_balance !== null && r.minimum_balance !== undefined ? Number(r.minimum_balance) : null,
+    keep_track_ratio: r.keep_track_ratio !== null && r.keep_track_ratio !== undefined ? Number(r.keep_track_ratio) : null,
     card_color: r.card_color ?? null,
     last4: r.last4 ?? null,
     created_at: r.created_at,
@@ -41,8 +41,7 @@ export async function getAllAccounts(db: DatabaseExecutor): Promise<Account[]> {
 
 export async function getAccountById(db: DatabaseExecutor, id: string): Promise<Account | null> {
   const r = await db.getFirst<any>(
-    `SELECT id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at 
-     FROM accounts WHERE id = ?;`,
+    `SELECT * FROM accounts WHERE id = ?;`,
     [id]
   );
   if (!r) return null;
@@ -51,10 +50,11 @@ export async function getAccountById(db: DatabaseExecutor, id: string): Promise<
     name: r.name,
     type: r.type,
     balance: Number(r.balance),
-    credit_limit: r.credit_limit !== null ? Number(r.credit_limit) : null,
-    billing_cycle_cut_day: r.billing_cycle_cut_day !== null ? Number(r.billing_cycle_cut_day) : null,
-    payment_due_day: r.payment_due_day !== null ? Number(r.payment_due_day) : null,
+    credit_limit: r.credit_limit !== null && r.credit_limit !== undefined ? Number(r.credit_limit) : null,
+    billing_cycle_cut_day: r.billing_cycle_cut_day !== null && r.billing_cycle_cut_day !== undefined ? Number(r.billing_cycle_cut_day) : null,
+    payment_due_day: r.payment_due_day !== null && r.payment_due_day !== undefined ? Number(r.payment_due_day) : null,
     minimum_balance: r.minimum_balance !== null && r.minimum_balance !== undefined ? Number(r.minimum_balance) : null,
+    keep_track_ratio: r.keep_track_ratio !== null && r.keep_track_ratio !== undefined ? Number(r.keep_track_ratio) : null,
     card_color: r.card_color ?? null,
     last4: r.last4 ?? null,
     created_at: r.created_at,
@@ -70,14 +70,23 @@ export async function createAccount(db: DatabaseExecutor, input: CreateAccountIn
   const cutDay = input.billing_cycle_cut_day ?? null;
   const dueDay = input.payment_due_day ?? null;
   const minBalance = input.minimum_balance ?? null;
+  const keepTrackRatio = input.keep_track_ratio !== undefined ? input.keep_track_ratio : null;
   const cardColor = input.card_color ?? null;
   const last4 = input.last4 ?? null;
 
-  await db.run(
-    `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [id, input.name, input.type, balance, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, now]
-  );
+  try {
+    await db.run(
+      `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, keep_track_ratio, card_color, last4, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [id, input.name, input.type, balance, creditLimit, cutDay, dueDay, minBalance, keepTrackRatio, cardColor, last4, now, now]
+    );
+  } catch {
+    await db.run(
+      `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [id, input.name, input.type, balance, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, now]
+    );
+  }
 
   return {
     id,
@@ -88,6 +97,7 @@ export async function createAccount(db: DatabaseExecutor, input: CreateAccountIn
     billing_cycle_cut_day: cutDay,
     payment_due_day: dueDay,
     minimum_balance: minBalance,
+    keep_track_ratio: keepTrackRatio,
     card_color: cardColor,
     last4,
     created_at: now,
@@ -108,15 +118,25 @@ export async function updateAccount(
   const cutDay = input.billing_cycle_cut_day !== undefined ? input.billing_cycle_cut_day : current.billing_cycle_cut_day;
   const dueDay = input.payment_due_day !== undefined ? input.payment_due_day : current.payment_due_day;
   const minBalance = input.minimum_balance !== undefined ? input.minimum_balance : current.minimum_balance;
+  const keepTrackRatio = input.keep_track_ratio !== undefined ? input.keep_track_ratio : current.keep_track_ratio;
   const cardColor = input.card_color !== undefined ? input.card_color : current.card_color;
   const last4 = input.last4 !== undefined ? input.last4 : current.last4;
 
-  await db.run(
-    `UPDATE accounts 
-     SET name = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, card_color = ?, last4 = ?, updated_at = ?
-     WHERE id = ?;`,
-    [name, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, input.id]
-  );
+  try {
+    await db.run(
+      `UPDATE accounts 
+       SET name = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, keep_track_ratio = ?, card_color = ?, last4 = ?, updated_at = ?
+       WHERE id = ?;`,
+      [name, creditLimit, cutDay, dueDay, minBalance, keepTrackRatio, cardColor, last4, now, input.id]
+    );
+  } catch {
+    await db.run(
+      `UPDATE accounts 
+       SET name = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, card_color = ?, last4 = ?, updated_at = ?
+       WHERE id = ?;`,
+      [name, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, input.id]
+    );
+  }
 
   return {
     ...current,
@@ -125,10 +145,86 @@ export async function updateAccount(
     billing_cycle_cut_day: cutDay,
     payment_due_day: dueDay,
     minimum_balance: minBalance,
+    keep_track_ratio: keepTrackRatio,
     card_color: cardColor,
     last4,
     updated_at: now,
   };
+}
+
+export async function purgeSeedDataAndInitializeUserVault(
+  db: DatabaseExecutor,
+  userBanks: Array<{ name: string; balance: number; minimum_balance?: number | null }>,
+  userCards: Array<{
+    name: string;
+    limit: number;
+    balance: number;
+    cutDay: number;
+    dueDay: number;
+    color: 'EMERALD' | 'PURPLE' | 'CARAMEL';
+    keepTrackRatio?: number;
+  }>
+): Promise<void> {
+  await db.withTransaction(async () => {
+    // Delete all existing dummy placeholder transactions, debts, obligations and accounts
+    await db.run(`DELETE FROM transactions;`);
+    await db.run(`DELETE FROM recurring_obligations;`);
+    await db.run(`DELETE FROM debts;`);
+    await db.run(`DELETE FROM accounts;`);
+
+    const now = new Date().toISOString();
+
+    // Insert user banks
+    for (const b of userBanks) {
+      const bankId = generateUUID();
+      const minBal = b.minimum_balance ?? 0.0;
+      await db.run(
+        `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at) 
+         VALUES (?, ?, 'BANK_DEPOSIT', ?, NULL, NULL, NULL, ?, NULL, NULL, ?, ?);`,
+        [bankId, b.name, b.balance, minBal, now, now]
+      );
+
+      // Record initial balance transaction if balance > 0
+      if (b.balance > 0) {
+        const txId = generateUUID();
+        await db.run(
+          `INSERT INTO transactions (id, account_id, type, amount, category, description, timestamp, is_reconciled, source, sync_status)
+           VALUES (?, ?, 'INFLOW', ?, 'Opening Balance', 'Initial Account Balance', ?, 1, 'MANUAL', 'LOCAL_ONLY');`,
+          [txId, bankId, b.balance, now]
+        );
+      }
+    }
+
+    // Insert user credit cards
+    for (const c of userCards) {
+      const cardId = generateUUID();
+      const ratio = c.keepTrackRatio ?? 50.0;
+      const last4 = Math.floor(1000 + Math.random() * 9000).toString();
+      try {
+        await db.run(
+          `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, keep_track_ratio, card_color, last4, created_at, updated_at) 
+           VALUES (?, ?, 'CREDIT_CARD', ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?);`,
+          [cardId, c.name, c.balance, c.limit, c.cutDay, c.dueDay, ratio, c.color, last4, now, now]
+        );
+      } catch {
+        await db.run(
+          `INSERT INTO accounts (id, name, type, balance, credit_limit, billing_cycle_cut_day, payment_due_day, minimum_balance, card_color, last4, created_at, updated_at) 
+           VALUES (?, ?, 'CREDIT_CARD', ?, ?, ?, ?, NULL, ?, ?, ?, ?);`,
+          [cardId, c.name, c.balance, c.limit, c.cutDay, c.dueDay, c.color, last4, now, now]
+        );
+      }
+
+      // Record initial card spend transaction if balance > 0
+      if (c.balance > 0) {
+        const txId = generateUUID();
+        await db.run(
+          `INSERT INTO transactions (id, account_id, type, amount, category, description, timestamp, is_reconciled, source, sync_status)
+           VALUES (?, ?, 'OUTFLOW', ?, 'Opening Balance', 'Opening Card Balance', ?, 1, 'MANUAL', 'LOCAL_ONLY');`,
+          [txId, cardId, c.balance, now]
+        );
+      }
+    }
+  });
 }
 
 export async function updateAccountBalance(

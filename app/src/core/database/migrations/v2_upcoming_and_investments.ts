@@ -22,6 +22,11 @@ export const migrationV2: Migration = {
         ALTER TABLE accounts ADD COLUMN last4 TEXT;
       `);
     } catch {}
+    try {
+      await db.exec(`
+        ALTER TABLE accounts ADD COLUMN keep_track_ratio REAL;
+      `);
+    } catch {}
 
     // 2. Upcoming Payments (Subscriptions, EMIs, and Loans)
     await db.exec(`

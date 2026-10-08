@@ -21,6 +21,7 @@ import {
   deleteTransactionRow,
   reassignAccountObligations,
   reassignAccountInvestments,
+  purgeSeedDataAndInitializeUserVault,
   generateUUID,
 } from '../../core/database/queries';
 import { CreateAccountInput, UpdateAccountInput } from '../../core/types/accounts';
@@ -149,6 +150,18 @@ export interface FinanceDataContextType {
   isSyncing: boolean;
   lastSyncResult: SyncResult | null;
   pendingChangesCount: number;
+  initializeUserVault: (
+    userBanks: Array<{ name: string; balance: number; minimum_balance?: number | null }>,
+    userCards: Array<{
+      name: string;
+      limit: number;
+      balance: number;
+      cutDay: number;
+      dueDay: number;
+      color: 'EMERALD' | 'PURPLE' | 'CARAMEL';
+      keepTrackRatio?: number;
+    }>
+  ) => Promise<void>;
 }
 
 const FinanceDataContext = createContext<FinanceDataContextType | null>(null);
@@ -641,6 +654,23 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  const initializeUserVault = async (
+    userBanks: Array<{ name: string; balance: number; minimum_balance?: number | null }>,
+    userCards: Array<{
+      name: string;
+      limit: number;
+      balance: number;
+      cutDay: number;
+      dueDay: number;
+      color: 'EMERALD' | 'PURPLE' | 'CARAMEL';
+      keepTrackRatio?: number;
+    }>
+  ): Promise<void> => {
+    const db = await getDatabase();
+    await purgeSeedDataAndInitializeUserVault(db, userBanks, userCards);
+    await loadData();
+  };
+
   // Computations
   const bankAccounts = accounts.filter((a) => a.type === 'BANK_DEPOSIT');
   const creditCards = accounts.filter((a) => a.type === 'CREDIT_CARD');
@@ -732,6 +762,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isSyncing,
         lastSyncResult,
         pendingChangesCount,
+        initializeUserVault,
       }}
     >
       {children}

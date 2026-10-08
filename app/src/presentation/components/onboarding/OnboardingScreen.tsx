@@ -8,13 +8,14 @@ import {
   StyleSheet,
   useWindowDimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 import { useFinanceData } from '../../hooks/useFinanceData';
 import { UserProfile, AvatarId } from '../../../core/types/profile';
-import { AutoLockPreset, AuthSecurityConfig } from '../../../core/types/auth';
+import { AutoLockPreset } from '../../../core/types/auth';
 import { SyncCadence, DayOfWeek } from '../../../core/types/sync';
 import { formatRupee } from '../../../core/utils/currency';
 
@@ -31,6 +32,7 @@ interface BankDraft {
   id: string;
   name: string;
   balance: number;
+  minBalance: number;
 }
 
 interface CardDraft {
@@ -40,13 +42,14 @@ interface CardDraft {
   balance: number;
   cutDay: number;
   dueDay: number;
+  keepTrackRatio: number; // e.g. 50 (for 50%)
   color: 'EMERALD' | 'PURPLE' | 'CARAMEL';
 }
 
 export const OnboardingScreen: React.FC = () => {
   const { colors } = useTheme();
-  const { user, config: securityConfig, updateConfig: updateSecurityConfig, completeOnboarding } = useAuthSecurity();
-  const { updateProfile, updateSyncConfig, addAccount } = useFinanceData();
+  const { user, updateConfig: updateSecurityConfig, completeOnboarding } = useAuthSecurity();
+  const { updateProfile, updateSyncConfig, initializeUserVault } = useFinanceData();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -60,27 +63,27 @@ export const OnboardingScreen: React.FC = () => {
   const [avatar, setAvatar] = useState<AvatarId>('Moon cat');
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
-  // Step 2: Bank Accounts
-  const [banks, setBanks] = useState<BankDraft[]>([
-    { id: 'b-1', name: 'HDFC Salary Account', balance: 50000 },
-  ]);
+  // Step 2: Bank Accounts (STARTS COMPLETELY EMPTY - No pre-added accounts!)
+  const [banks, setBanks] = useState<BankDraft[]>([]);
   const [newBankName, setNewBankName] = useState('');
   const [newBankBalance, setNewBankBalance] = useState('');
+  const [newBankMinBalance, setNewBankMinBalance] = useState('0');
 
-  // Step 3: Credit Cards
-  const [cards, setCards] = useState<CardDraft[]>([
-    { id: 'c-1', name: 'HDFC Regalia Gold', limit: 250000, balance: 14200, cutDay: 15, dueDay: 5, color: 'EMERALD' },
-  ]);
+  // Step 3: Credit Cards (STARTS COMPLETELY EMPTY - No pre-added cards!)
+  const [cards, setCards] = useState<CardDraft[]>([]);
   const [newCardName, setNewCardName] = useState('');
   const [newCardLimit, setNewCardLimit] = useState('');
-  const [newCardBalance, setNewCardBalance] = useState('');
+  const [newCardBalance, setNewCardBalance] = useState('0');
   const [newCardCutDay, setNewCardCutDay] = useState('15');
   const [newCardDueDay, setNewCardDueDay] = useState('5');
+  const [newCardKeepTrackRatio, setNewCardKeepTrackRatio] = useState<number>(50); // Default 50%
+  const [newCardColor, setNewCardColor] = useState<'EMERALD' | 'PURPLE' | 'CARAMEL'>('EMERALD');
 
-  // Step 4: Salary
-  const [hasSalary, setHasSalary] = useState(true);
+  // Step 4: Income Type (Salaried vs Other Payments)
+  const [incomeType, setIncomeType] = useState<'SALARIED' | 'OTHER'>('SALARIED');
   const [salaryAmount, setSalaryAmount] = useState('148000');
   const [salaryDay, setSalaryDay] = useState('1');
+  const [selectedSalaryBank, setSelectedSalaryBank] = useState<string>('');
 
   // Step 5: Google Drive
   const [driveFolderName, setDriveFolderName] = useState('Aegis Spendly');
@@ -97,13 +100,27 @@ export const OnboardingScreen: React.FC = () => {
     { id: 'IDENTITY', label: 'Identity', number: 1 },
     { id: 'BANKS', label: 'Banks', number: 2 },
     { id: 'CARDS', label: 'Cards', number: 3 },
-    { id: 'SALARY', label: 'Salary', number: 4 },
+    { id: 'SALARY', label: 'Income', number: 4 },
     { id: 'DRIVE', label: 'Drive Sync', number: 5 },
     { id: 'SECURITY', label: 'Auto-Lock', number: 6 },
     { id: 'CONFIRMATION', label: 'Ready', number: 7 },
   ];
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
+
+  // Stepper Back helper
+  const handleGoBack = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStep(STEPS[currentStepIndex - 1].id);
+    }
+  };
+
+  const handleJumpToStep = (targetIdx: number) => {
+    // Only allow clicking to steps that have already been reached
+    if (targetIdx <= currentStepIndex) {
+      setCurrentStep(STEPS[targetIdx].id);
+    }
+  };
 
   // Validation for Step 1
   const validateUsername = (val: string): boolean => {
@@ -127,10 +144,20 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleAddBank = () => {
     if (!newBankName.trim()) return;
-    const bal = parseFloat(newBankBalance) || 0;
-    setBanks((prev) => [...prev, { id: 'b-' + Date.now(), name: newBankName.trim(), balance: bal }]);
+    const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
+    const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+    setBanks((prev) => [
+      ...prev,
+      {
+        id: 'b-' + Date.now(),
+        name: newBankName.trim(),
+        balance: bal,
+        minBalance: minBal,
+      },
+    ]);
     setNewBankName('');
     setNewBankBalance('');
+    setNewBankMinBalance('0');
   };
 
   const handleRemoveBank = (id: string) => {
@@ -139,8 +166,8 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleAddCard = () => {
     if (!newCardName.trim()) return;
-    const lim = parseFloat(newCardLimit) || 100000;
-    const bal = parseFloat(newCardBalance) || 0;
+    const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
+    const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
     const cut = parseInt(newCardCutDay, 10) || 15;
     const due = parseInt(newCardDueDay, 10) || 5;
     setCards((prev) => [
@@ -152,12 +179,14 @@ export const OnboardingScreen: React.FC = () => {
         balance: bal,
         cutDay: cut,
         dueDay: due,
-        color: 'EMERALD',
+        keepTrackRatio: newCardKeepTrackRatio,
+        color: newCardColor,
       },
     ]);
     setNewCardName('');
     setNewCardLimit('');
-    setNewCardBalance('');
+    setNewCardBalance('0');
+    setNewCardKeepTrackRatio(50);
   };
 
   const handleRemoveCard = (id: string) => {
@@ -191,34 +220,27 @@ export const OnboardingScreen: React.FC = () => {
   const handleFinishOnboarding = async () => {
     setIsFinishing(true);
     try {
-      // 1. Create configured bank accounts
-      for (const b of banks) {
-        await addAccount({
-          name: b.name,
-          type: 'BANK_DEPOSIT',
-          balance: b.balance,
-          credit_limit: null,
-          billing_cycle_cut_day: null,
-          payment_due_day: null,
-          minimum_balance: 5000,
-        });
+      // 1. Initialize user database vault with EXACT user banks & cards (purges all dummy seed accounts & placeholder txs)
+      if (banks.length > 0 || cards.length > 0) {
+        await initializeUserVault(
+          banks.map((b) => ({
+            name: b.name,
+            balance: b.balance,
+            minimum_balance: b.minBalance,
+          })),
+          cards.map((c) => ({
+            name: c.name,
+            limit: c.limit,
+            balance: c.balance,
+            cutDay: c.cutDay,
+            dueDay: c.dueDay,
+            color: c.color,
+            keepTrackRatio: c.keepTrackRatio,
+          }))
+        );
       }
 
-      // 2. Create configured credit cards
-      for (const c of cards) {
-        await addAccount({
-          name: c.name,
-          type: 'CREDIT_CARD',
-          balance: c.balance,
-          credit_limit: c.limit,
-          billing_cycle_cut_day: c.cutDay,
-          payment_due_day: c.dueDay,
-          minimum_balance: null,
-          card_color: c.color,
-        });
-      }
-
-      // 3. Update User Profile
+      // 2. Update User Profile
       const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');
       const profileUpdates: Partial<UserProfile> = {
         name: displayName.trim() || 'Rajarshi Giri',
@@ -226,14 +248,15 @@ export const OnboardingScreen: React.FC = () => {
         handle: `@${cleanUsername}`,
         email: email.trim(),
         avatar,
-        salary_amount: hasSalary ? parseFloat(salaryAmount) || 0 : 0,
-        salary_day: hasSalary ? parseInt(salaryDay, 10) || 1 : 1,
+        salary_amount: incomeType === 'SALARIED' ? parseFloat(salaryAmount) || 0 : 0,
+        salary_day: incomeType === 'SALARIED' ? parseInt(salaryDay, 10) || 1 : 1,
+        salary_account_id: selectedSalaryBank || (banks[0]?.name ?? ''),
         driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
         isOnboarded: true,
       };
       updateProfile(profileUpdates);
 
-      // 4. Update Google Sync preferences
+      // 3. Update Google Sync preferences
       updateSyncConfig({
         driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
         cadence: syncCadence,
@@ -242,14 +265,14 @@ export const OnboardingScreen: React.FC = () => {
         googleEmail: email.trim(),
       });
 
-      // 5. Update Security settings
+      // 4. Update Security settings
       updateSecurityConfig({
         autoLockOnBlur,
         inactivityTimeoutMinutes: inactivityMinutes,
         lockPreset: selectedPreset,
       });
 
-      // 6. Complete auth onboarding
+      // 5. Complete auth onboarding
       completeOnboarding({
         username: cleanUsername,
         name: displayName.trim(),
@@ -257,7 +280,6 @@ export const OnboardingScreen: React.FC = () => {
       });
     } catch (e) {
       console.error('[Onboarding] Error during completion:', e);
-      // Fallback completion
       completeOnboarding({ username: username.trim() });
     } finally {
       setIsFinishing(false);
@@ -271,760 +293,1101 @@ export const OnboardingScreen: React.FC = () => {
     { id: 'Star mage', label: 'Star mage', icon: 'sparkles' },
   ];
 
+  // Threshold preview values for the slider in Step 3
+  const greenThreshold = Math.round(newCardKeepTrackRatio * 0.5);
+  const yellowThreshold = newCardKeepTrackRatio;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.container, { maxWidth: isDesktop ? 680 : '100%' }]}>
-        {/* Header Breadcrumbs / Progress */}
-        <View style={styles.stepperRow}>
-          {STEPS.map((s, idx) => {
-            const isDone = idx < currentStepIndex;
-            const isCurrent = idx === currentStepIndex;
-            return (
-              <View key={s.id} style={styles.stepIndicatorItem}>
-                <View
-                  style={[
-                    styles.stepDot,
-                    {
-                      backgroundColor: isDone || isCurrent ? colors.primary : colors.surface,
-                      borderColor: isDone || isCurrent ? colors.primary : colors.borderSubtle,
-                    },
-                  ]}
-                >
-                  {isDone ? (
-                    <Ionicons name="checkmark" size={11} color="#FFFFFF" />
-                  ) : (
-                    <Text
+      <ScrollView contentContainerStyle={styles.scrollRoot} showsVerticalScrollIndicator={false}>
+        <View style={[styles.container, { maxWidth: isDesktop ? 680 : '100%' }]}>
+          {/* Header Stepper Navigation */}
+          <View style={styles.stepperRow}>
+            {STEPS.map((s, idx) => {
+              const isDone = idx < currentStepIndex;
+              const isCurrent = idx === currentStepIndex;
+              const canClick = idx <= currentStepIndex;
+              return (
+                <View key={s.id} style={styles.stepIndicatorItem}>
+                  <TouchableOpacity
+                    disabled={!canClick}
+                    onPress={() => handleJumpToStep(idx)}
+                    style={[
+                      styles.stepDot,
+                      {
+                        backgroundColor: isDone || isCurrent ? colors.primary : colors.surface,
+                        borderColor: isDone || isCurrent ? colors.primary : colors.borderSubtle,
+                      },
+                    ]}
+                  >
+                    {isDone ? (
+                      <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.stepDotText,
+                          { color: isCurrent ? '#FFFFFF' : colors.textMuted },
+                        ]}
+                      >
+                        {s.number}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {idx < STEPS.length - 1 && (
+                    <View
                       style={[
-                        styles.stepDotText,
-                        { color: isCurrent ? '#FFFFFF' : colors.textMuted },
+                        styles.stepConnector,
+                        { backgroundColor: isDone ? colors.primary : colors.borderSubtle },
                       ]}
-                    >
-                      {s.number}
-                    </Text>
+                    />
                   )}
                 </View>
-                {idx < STEPS.length - 1 && (
+              );
+            })}
+          </View>
+
+          {/* Main Content Card */}
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            {/* STEP 1: IDENTITY & USERNAME */}
+            {currentStep === 'IDENTITY' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                  <Ionicons name="shield-checkmark" size={14} color="#059669" style={{ marginRight: 6 }} />
+                  <Text style={styles.badgePillText}>STEP 1 • IDENTITY & PROFILE</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Aegis Spendly</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Let's personalize your ledger. All data is kept strictly on-device and in your private Google Drive.
+                </Text>
+
+                {/* Username Field (MANDATORY) */}
+                <View style={styles.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
+                      VAULT USERNAME <Text style={{ color: '#DC2626' }}>*</Text>
+                    </Text>
+                    <Text style={[styles.helper, { color: colors.textMuted }]}>Mandatory (Cannot be skipped)</Text>
+                  </View>
                   <View
                     style={[
-                      styles.stepConnector,
-                      { backgroundColor: isDone ? colors.primary : colors.borderSubtle },
+                      styles.inputWrap,
+                      {
+                        borderColor: usernameError ? '#DC2626' : colors.border,
+                        backgroundColor: colors.background,
+                      },
                     ]}
-                  />
-                )}
-              </View>
-            );
-          })}
-        </View>
+                  >
+                    <Text style={[styles.atSign, { color: colors.primary }]}>@</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      value={username}
+                      onChangeText={(val) => {
+                        setUsername(val);
+                        validateUsername(val);
+                      }}
+                      placeholder="your_unique_username"
+                      placeholderTextColor={colors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
+                </View>
 
-        {/* Content Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          {/* STEP 1: IDENTITY & USERNAME */}
-          {currentStep === 'IDENTITY' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                <Ionicons name="shield-checkmark" size={14} color="#059669" style={{ marginRight: 6 }} />
-                <Text style={styles.badgePillText}>STEP 1 • IDENTITY & PROFILE</Text>
-              </View>
+                {/* Display Name Field */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>FULL NAME / DISPLAY NAME</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Ionicons name="person-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                      placeholder="Your Full Name"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                </View>
 
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Aegis Spendly</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Let's set up your profile and notifications. Your data is stored locally and in your private Google Drive.
-              </Text>
-
-              {/* Username Field (MANDATORY) */}
-              <View style={styles.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                {/* Email Field */}
+                <View style={styles.formGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>
-                    VAULT USERNAME <Text style={{ color: '#DC2626' }}>*</Text>
+                    GOOGLE ACCOUNT EMAIL (DRIVE AUTHOR & ALERTS)
                   </Text>
-                  <Text style={[styles.helper, { color: colors.textMuted }]}>Cannot be skipped</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Ionicons name="mail-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      value={email}
+                      onChangeText={setEmail}
+                      placeholder="you@gmail.com"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
                 </View>
-                <View
-                  style={[
-                    styles.inputWrap,
-                    {
-                      borderColor: usernameError ? '#DC2626' : colors.border,
-                      backgroundColor: colors.background,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.atSign, { color: colors.primary }]}>@</Text>
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={username}
-                    onChangeText={(val) => {
-                      setUsername(val);
-                      validateUsername(val);
-                    }}
-                    placeholder="your_username"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-                {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
-              </View>
 
-              {/* Display Name Field */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>FULL NAME / DISPLAY NAME</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Ionicons name="person-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    placeholder="Your Name"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-              </View>
-
-              {/* Email Field */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  GOOGLE ACCOUNT EMAIL (DRIVE & NOTIFICATIONS)
-                </Text>
-                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Ionicons name="mail-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="you@gmail.com"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-
-              {/* Avatar Selector */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>CHOOSE VAULT AVATAR</Text>
-                <View style={styles.avatarGrid}>
-                  {avatarOptions.map((opt) => {
-                    const isSelected = avatar === opt.id;
-                    return (
-                      <TouchableOpacity
-                        key={opt.id}
-                        style={[
-                          styles.avatarOption,
-                          {
-                            borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                          },
-                        ]}
-                        onPress={() => setAvatar(opt.id)}
-                      >
-                        <Ionicons
-                          name={opt.icon}
-                          size={18}
-                          color={isSelected ? colors.primary : colors.textSecondary}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text
+                {/* Avatar Selector */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>CHOOSE VAULT AVATAR</Text>
+                  <View style={styles.avatarGrid}>
+                    {avatarOptions.map((opt) => {
+                      const isSelected = avatar === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
                           style={[
-                            styles.avatarLabel,
-                            { color: isSelected ? colors.primary : colors.textPrimary },
+                            styles.avatarOption,
+                            {
+                              borderColor: isSelected ? colors.primary : colors.border,
+                              backgroundColor: isSelected ? colors.primaryLight : colors.background,
+                            },
                           ]}
+                          onPress={() => setAvatar(opt.id)}
                         >
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* CTA Next */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                onPress={handleNextFromIdentity}
-              >
-                <Text style={styles.primaryBtnText}>Continue to Accounts</Text>
-                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* STEP 2: BANK ACCOUNTS (SKIPPABLE) */}
-          {currentStep === 'BANKS' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
-                <Ionicons name="business" size={14} color="#7C3AED" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#6D28D9' }]}>STEP 2 • BANK ACCOUNTS & WALLETS</Text>
-              </View>
-
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Bank Accounts</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Track liquidity and balances. You can add your main banks now or skip and add later.
-              </Text>
-
-              {/* Configured Banks List */}
-              <View style={{ marginBottom: 16 }}>
-                {banks.map((b) => (
-                  <View
-                    key={b.id}
-                    style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
-                  >
-                    <View style={[styles.itemIconBox, { backgroundColor: '#DCFCE7' }]}>
-                      <Ionicons name="business-outline" size={16} color="#15803D" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={[styles.itemName, { color: colors.textPrimary }]}>{b.name}</Text>
-                      <Text style={[styles.itemMeta, { color: colors.textMuted }]}>Balance: {formatRupee(b.balance)}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => handleRemoveBank(b.id)} style={styles.removeBtn}>
-                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-
-              {/* Quick Add Bank Row */}
-              <View style={[styles.addBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                <Text style={[styles.addBoxTitle, { color: colors.textPrimary }]}>+ Add Another Bank / Wallet</Text>
-                <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 10, marginTop: 8 }}>
-                  <TextInput
-                    style={[styles.inputSimple, { flex: 2, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder="Bank nickname (e.g. SBI Savings)"
-                    placeholderTextColor={colors.textMuted}
-                    value={newBankName}
-                    onChangeText={setNewBankName}
-                  />
-                  <TextInput
-                    style={[styles.inputSimple, { flex: 1, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder="Balance (₹)"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={newBankBalance}
-                    onChangeText={setNewBankBalance}
-                  />
-                  <TouchableOpacity
-                    style={[styles.addBtnSmall, { backgroundColor: colors.primary }]}
-                    onPress={handleAddBank}
-                  >
-                    <Text style={styles.addBtnSmallText}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.btnRow}>
-                <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('CARDS')}>
-                  <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, flex: 1, marginLeft: 12 }]}
-                  onPress={() => setCurrentStep('CARDS')}
-                >
-                  <Text style={styles.primaryBtnText}>Continue to Credit Cards</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* STEP 3: CREDIT CARDS (SKIPPABLE) */}
-          {currentStep === 'CARDS' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                <Ionicons name="card" size={14} color="#D97706" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#B45309' }]}>STEP 3 • CREDIT CARDS</Text>
-              </View>
-
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Credit Cards</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Keep credit utilization and billing cut-off days in check. Skip if you don't use credit cards.
-              </Text>
-
-              {/* Configured Cards List */}
-              <View style={{ marginBottom: 16 }}>
-                {cards.map((c) => (
-                  <View
-                    key={c.id}
-                    style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
-                  >
-                    <View style={[styles.itemIconBox, { backgroundColor: '#FEF3C7' }]}>
-                      <Ionicons name="card-outline" size={16} color="#B45309" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={[styles.itemName, { color: colors.textPrimary }]}>{c.name}</Text>
-                      <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                        Limit: {formatRupee(c.limit)} • Due {c.dueDay}th
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => handleRemoveCard(c.id)} style={styles.removeBtn}>
-                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-
-              {/* Quick Add Card Row */}
-              <View style={[styles.addBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                <Text style={[styles.addBoxTitle, { color: colors.textPrimary }]}>+ Add Another Credit Card</Text>
-                <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 10, marginTop: 8 }}>
-                  <TextInput
-                    style={[styles.inputSimple, { flex: 2, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder="Card nickname (e.g. Amazon ICICI)"
-                    placeholderTextColor={colors.textMuted}
-                    value={newCardName}
-                    onChangeText={setNewCardName}
-                  />
-                  <TextInput
-                    style={[styles.inputSimple, { flex: 1, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder="Limit (₹)"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={newCardLimit}
-                    onChangeText={setNewCardLimit}
-                  />
-                  <TextInput
-                    style={[styles.inputSimple, { flex: 1, borderColor: colors.border, color: colors.textPrimary }]}
-                    placeholder="Due Day (1-31)"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={newCardDueDay}
-                    onChangeText={setNewCardDueDay}
-                  />
-                  <TouchableOpacity
-                    style={[styles.addBtnSmall, { backgroundColor: colors.primary }]}
-                    onPress={handleAddCard}
-                  >
-                    <Text style={styles.addBtnSmallText}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.btnRow}>
-                <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('SALARY')}>
-                  <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, flex: 1, marginLeft: 12 }]}
-                  onPress={() => setCurrentStep('SALARY')}
-                >
-                  <Text style={styles.primaryBtnText}>Continue to Salary</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* STEP 4: SALARY & MONTHLY INFLOW (SKIPPABLE) */}
-          {currentStep === 'SALARY' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                <Ionicons name="cash" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 4 • SALARY & INFLOW</Text>
-              </View>
-
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Monthly Income Projection</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Spendly projects monthly cash flow and calculates safe-to-spend envelopes based on your regular earnings.
-              </Text>
-
-              {/* Toggle Has Salary */}
-              <TouchableOpacity
-                style={[
-                  styles.toggleCard,
-                  {
-                    backgroundColor: hasSalary ? colors.primaryLight : colors.background,
-                    borderColor: hasSalary ? colors.primary : colors.borderSubtle,
-                  },
-                ]}
-                onPress={() => setHasSalary(!hasSalary)}
-              >
-                <Ionicons
-                  name={hasSalary ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={hasSalary ? colors.primary : colors.textMuted}
-                  style={{ marginRight: 10 }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>
-                    I have a regular monthly salary or recurring income
-                  </Text>
-                  <Text style={[styles.toggleSub, { color: colors.textMuted }]}>
-                    Uncheck if your income is variable or freelance.
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {hasSalary && (
-                <View style={{ marginTop: 14 }}>
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>EXPECTED MONTHLY SALARY (₹)</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                      <Text style={[styles.atSign, { color: colors.primary }]}>₹</Text>
-                      <TextInput
-                        style={[styles.input, { color: colors.textPrimary }]}
-                        value={salaryAmount}
-                        onChangeText={setSalaryAmount}
-                        placeholder="148000"
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>PAYDAY (DAY OF MONTH 1 - 31)</Text>
-                    <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                      <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                      <TextInput
-                        style={[styles.input, { color: colors.textPrimary }]}
-                        value={salaryDay}
-                        onChangeText={setSalaryDay}
-                        placeholder="1"
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* Actions */}
-              <View style={styles.btnRow}>
-                <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('DRIVE')}>
-                  <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, flex: 1, marginLeft: 12 }]}
-                  onPress={() => setCurrentStep('DRIVE')}
-                >
-                  <Text style={styles.primaryBtnText}>Continue to Drive Sync</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* STEP 5: GOOGLE DRIVE FOLDER & CADENCE */}
-          {currentStep === 'DRIVE' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                <Ionicons name="logo-google" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 5 • GOOGLE DRIVE STORAGE</Text>
-              </View>
-
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Google Drive Folder</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Zero 3rd-party servers! Spreadsheets and backups will be saved strictly into your private Google Drive folder.
-              </Text>
-
-              {/* Folder Name Input */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>TARGET GOOGLE DRIVE FOLDER</Text>
-                <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Ionicons name="folder-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={driveFolderName}
-                    onChangeText={setDriveFolderName}
-                    placeholder="Aegis Spendly"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-                <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>
-                  The app will create or locate this folder at the root of your Google Drive.
-                </Text>
-              </View>
-
-              {/* Sync Cadence Cards */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>DEFAULT SYNC CADENCE</Text>
-                <View style={{ gap: 8, marginTop: 4 }}>
-                  {[
-                    {
-                      id: 'MANUAL' as SyncCadence,
-                      title: 'Manual (Web Default)',
-                      desc: 'Sync on-demand via the header button when finished entering transactions.',
-                    },
-                    {
-                      id: 'DAILY' as SyncCadence,
-                      title: 'Daily Scheduled (10:00 PM)',
-                      desc: 'Bundles all changes of the day and pushes once per day at 10 PM.',
-                    },
-                    {
-                      id: 'WEEKLY' as SyncCadence,
-                      title: 'Weekly Scheduled (Sunday)',
-                      desc: 'Pushes weekly batch every Sunday night at 11 PM.',
-                    },
-                  ].map((cad) => {
-                    const isSelected = syncCadence === cad.id;
-                    return (
-                      <TouchableOpacity
-                        key={cad.id}
-                        style={[
-                          styles.cadenceCard,
-                          {
-                            backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                            borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                          },
-                        ]}
-                        onPress={() => setSyncCadence(cad.id)}
-                      >
-                        <Ionicons
-                          name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                          size={18}
-                          color={isSelected ? colors.primary : colors.textMuted}
-                          style={{ marginRight: 10 }}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.cadenceTitle,
-                              { color: isSelected ? colors.primary : colors.textPrimary },
-                            ]}
-                          >
-                            {cad.title}
-                          </Text>
-                          <Text style={[styles.cadenceDesc, { color: colors.textMuted }]}>{cad.desc}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Actions */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]}
-                onPress={() => setCurrentStep('SECURITY')}
-              >
-                <Text style={styles.primaryBtnText}>Continue to Auto-Lock Settings</Text>
-                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* STEP 6: AUTO-LOCK SECURITY OPTIONS */}
-          {currentStep === 'SECURITY' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                <Ionicons name="lock-closed" size={14} color="#DC2626" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#B91C1C' }]}>STEP 6 • VAULT AUTO-LOCK FREQUENCY</Text>
-              </View>
-
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Auto-Lock Policy</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Decide when the webpage automatically locks itself with your Master PIN. Choose from 4 curated modes:
-              </Text>
-
-              {/* 4 Lock Policy Cards */}
-              <View style={{ gap: 10, marginBottom: 16 }}>
-                {[
-                  {
-                    id: 'HIGH' as AutoLockPreset,
-                    title: 'Paranoid Security (1 Minute)',
-                    desc: 'Locks after 1 min idle AND immediately when switching browser tabs or minimizing.',
-                    tag: 'Shared Devices',
-                    icon: 'shield-half',
-                  },
-                  {
-                    id: 'BALANCED' as AutoLockPreset,
-                    title: 'Balanced (5 Minutes) — Recommended',
-                    desc: 'Locks after 5 min idle AND immediately when switching browser tabs.',
-                    tag: 'Default',
-                    icon: 'shield-checkmark',
-                  },
-                  {
-                    id: 'RELAXED' as AutoLockPreset,
-                    title: 'Relaxed (15 Minutes)',
-                    desc: 'Locks after 15 min idle. Does NOT lock on quick tab switches.',
-                    tag: 'Personal Laptops',
-                    icon: 'cafe-outline',
-                  },
-                  {
-                    id: 'EXTENDED' as AutoLockPreset,
-                    title: 'Extended Session (30 Minutes)',
-                    desc: 'Locks after 30 min idle. Tab switching remains uninterrupted.',
-                    tag: 'Dedicated Workspace',
-                    icon: 'laptop-outline',
-                  },
-                ].map((p) => {
-                  const isSelected = selectedPreset === p.id;
-                  return (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        styles.presetCard,
-                        {
-                          backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                          borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                        },
-                      ]}
-                      onPress={() => handleSelectPreset(p.id)}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <Ionicons
-                            name={p.icon as any}
+                            name={opt.icon}
                             size={18}
                             color={isSelected ? colors.primary : colors.textSecondary}
+                            style={{ marginRight: 6 }}
                           />
                           <Text
                             style={[
-                              styles.presetTitle,
+                              styles.avatarLabel,
                               { color: isSelected ? colors.primary : colors.textPrimary },
                             ]}
                           >
-                            {p.title}
-                          </Text>
-                        </View>
-                        <View style={[styles.tagPill, { backgroundColor: isSelected ? colors.primary : '#F1F5F9' }]}>
-                          <Text style={[styles.tagText, { color: isSelected ? '#FFFFFF' : colors.textMuted }]}>
-                            {p.tag}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={[styles.presetDesc, { color: colors.textMuted }]}>{p.desc}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Fine-Tuning Switches */}
-              <View style={[styles.customToggleBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                <Text style={[styles.customToggleHeader, { color: colors.textSecondary }]}>FINE-TUNE PREFERENCES</Text>
-
-                <TouchableOpacity
-                  style={styles.toggleRow}
-                  onPress={() => {
-                    setAutoLockOnBlur(!autoLockOnBlur);
-                    setSelectedPreset('CUSTOM');
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
-                      Lock immediately on tab switch / window blur
-                    </Text>
-                    <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
-                      Hides sensitive financials whenever you switch tabs
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
-                    size={28}
-                    color={autoLockOnBlur ? colors.primary : colors.textMuted}
-                  />
-                </TouchableOpacity>
-
-                <View style={{ marginTop: 10 }}>
-                  <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Inactivity Timeout</Text>
-                  <View style={styles.inactivityRow}>
-                    {[1, 5, 15, 30, 0].map((mins) => {
-                      const isSel = inactivityMinutes === mins;
-                      return (
-                        <TouchableOpacity
-                          key={mins}
-                          style={[
-                            styles.minutePill,
-                            {
-                              backgroundColor: isSel ? colors.primary : colors.surface,
-                              borderColor: isSel ? colors.primary : colors.borderSubtle,
-                            },
-                          ]}
-                          onPress={() => {
-                            setInactivityMinutes(mins);
-                            setSelectedPreset('CUSTOM');
-                          }}
-                        >
-                          <Text style={[styles.minutePillText, { color: isSel ? '#FFFFFF' : colors.textPrimary }]}>
-                            {mins === 0 ? 'Never' : `${mins}m`}
+                            {opt.label}
                           </Text>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
                 </View>
+
+                {/* Continue CTA */}
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleNextFromIdentity}
+                >
+                  <Text style={styles.primaryBtnText}>Continue to Bank Accounts</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
               </View>
+            )}
 
-              {/* Actions */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 14 }]}
-                onPress={() => setCurrentStep('CONFIRMATION')}
-              >
-                <Text style={styles.primaryBtnText}>Review & Finish</Text>
-                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-            </View>
-          )}
+            {/* STEP 2: BANK ACCOUNTS (STARTS EMPTY, FULL DATA ENTRY) */}
+            {currentStep === 'BANKS' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
+                  <Ionicons name="business" size={14} color="#7C3AED" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#6D28D9' }]}>STEP 2 • BANK ACCOUNTS & WALLETS</Text>
+                </View>
 
-          {/* STEP 7: REVIEW & COMPLETE */}
-          {currentStep === 'CONFIRMATION' && (
-            <View>
-              <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                <Ionicons name="checkmark-done-circle" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                <Text style={[styles.badgePillText, { color: '#15803D' }]}>FINAL STEP • READY TO LAUNCH</Text>
-              </View>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Bank Accounts</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Record your liquid accounts, cash balances, and minimum required balances.
+                </Text>
 
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Your Aegis Spendly Vault</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>
-                Everything is configured and encrypted. Review your personalized setup below:
-              </Text>
-
-              {/* Summary Cards */}
-              <View style={[styles.summaryCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Profile Identity</Text>
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                    {displayName} (@{username})
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Google Account</Text>
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{email}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Drive Folder</Text>
-                  <Text style={[styles.summaryVal, { color: colors.primary, fontWeight: '700' }]}>
-                    📁 {driveFolderName}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Bank Accounts</Text>
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                    {banks.length} account{banks.length === 1 ? '' : 's'} added
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Credit Cards</Text>
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                    {cards.length} card{cards.length === 1 ? '' : 's'} configured
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Auto-Lock Policy</Text>
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                    {inactivityMinutes === 0 ? 'No idle lock' : `${inactivityMinutes}m idle`}
-                    {autoLockOnBlur ? ' + Tab blur lock' : ''}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Finish Button */}
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 18 }]}
-                onPress={handleFinishOnboarding}
-                disabled={isFinishing}
-              >
-                {isFinishing ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                {/* List of User's Added Banks */}
+                {banks.length === 0 ? (
+                  <View style={[styles.emptyNoticeBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                    <Ionicons name="wallet-outline" size={28} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                    <Text style={[styles.emptyNoticeTitle, { color: colors.textPrimary }]}>No Banks Added Yet</Text>
+                    <Text style={[styles.emptyNoticeSub, { color: colors.textMuted }]}>
+                      Fill in your bank account details below, or click "Skip for now" to add them later.
+                    </Text>
+                  </View>
                 ) : (
-                  <>
-                    <Ionicons name="rocket-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryBtnText}>Launch Spendly Vault</Text>
-                  </>
+                  <View style={{ marginBottom: 16 }}>
+                    {banks.map((b) => (
+                      <View
+                        key={b.id}
+                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
+                      >
+                        <View style={[styles.itemIconBox, { backgroundColor: '#DCFCE7' }]}>
+                          <Ionicons name="business-outline" size={16} color="#15803D" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{b.name}</Text>
+                          <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                            Current: {formatRupee(b.balance)} • Min Required: {formatRupee(b.minBalance)}
+                          </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => handleRemoveBank(b.id)} style={styles.removeBtn}>
+                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
                 )}
-              </TouchableOpacity>
-            </View>
-          )}
+
+                {/* Full Form: Add A Bank Account */}
+                <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>+ Add A Bank Account</Text>
+
+                  <View style={styles.formField}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BANK NICKNAME / ACCOUNT NAME</Text>
+                    <TextInput
+                      style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                      placeholder="e.g. HDFC Salary, SBI Savings, Cash Wallet"
+                      placeholderTextColor={colors.textMuted}
+                      value={newBankName}
+                      onChangeText={setNewBankName}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT BALANCE (₹)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="e.g. 50000"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newBankBalance}
+                        onChangeText={setNewBankBalance}
+                      />
+                    </View>
+
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>MINIMUM BALANCE REQUIRED (₹)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="e.g. 10000 (0 for zero balance)"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newBankMinBalance}
+                        onChangeText={setNewBankMinBalance}
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.addCardBtn, { backgroundColor: colors.primary }]}
+                    onPress={handleAddBank}
+                  >
+                    <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.addCardBtnText}>Add This Bank</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Bottom Navigation with Back, Skip, Continue */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('CARDS')}>
+                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
+                      onPress={() => setCurrentStep('CARDS')}
+                    >
+                      <Text style={styles.primaryBtnText}>Continue to Cards</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* STEP 3: CREDIT CARDS (STARTS EMPTY, CLEAR LABELED FORM & TRACK SLIDER) */}
+            {currentStep === 'CARDS' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                  <Ionicons name="card" size={14} color="#D97706" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#B45309' }]}>STEP 3 • CREDIT CARDS</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Credit Cards</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Set your credit limits, billing statement cut-off days, due dates, and custom utilization thresholds.
+                </Text>
+
+                {/* List of User's Added Cards */}
+                {cards.length === 0 ? (
+                  <View style={[styles.emptyNoticeBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                    <Ionicons name="card-outline" size={28} color={colors.textMuted} style={{ marginBottom: 6 }} />
+                    <Text style={[styles.emptyNoticeTitle, { color: colors.textPrimary }]}>No Credit Cards Added Yet</Text>
+                    <Text style={[styles.emptyNoticeSub, { color: colors.textMuted }]}>
+                      Add your cards using the labeled form below, or click "Skip for now" if you don't use credit cards.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ marginBottom: 16 }}>
+                    {cards.map((c) => (
+                      <View
+                        key={c.id}
+                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
+                      >
+                        <View style={[styles.itemIconBox, { backgroundColor: '#FEF3C7' }]}>
+                          <Ionicons name="card-outline" size={16} color="#B45309" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{c.name}</Text>
+                          <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
+                            Limit: {formatRupee(c.limit)} • Bill Cut: {c.cutDay}th • Due: {c.dueDay}th • Track Ratio: {c.keepTrackRatio}%
+                          </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => handleRemoveCard(c.id)} style={styles.removeBtn}>
+                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Full Form: Add A Credit Card with Clear Labels */}
+                <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>+ Add A Credit Card</Text>
+
+                  {/* 1. Card Nickname */}
+                  <View style={styles.formField}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CARD NICKNAME / BANK</Text>
+                    <TextInput
+                      style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                      placeholder="e.g. HDFC Regalia Gold, Amazon Pay ICICI, Tata Neu"
+                      placeholderTextColor={colors.textMuted}
+                      value={newCardName}
+                      onChangeText={setNewCardName}
+                    />
+                  </View>
+
+                  {/* 2. Limit & Current Outstanding Balance */}
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TOTAL CREDIT LIMIT (₹)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="e.g. 200000"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newCardLimit}
+                        onChangeText={setNewCardLimit}
+                      />
+                    </View>
+
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT OUTSTANDING / SPENT (₹)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="0 (if fully paid)"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newCardBalance}
+                        onChangeText={setNewCardBalance}
+                      />
+                    </View>
+                  </View>
+
+                  {/* 3. Statement Cut Day & Due Date */}
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BILL STATEMENT CUT-OFF DAY (1 - 31)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="e.g. 15 (15th of month)"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newCardCutDay}
+                        onChangeText={setNewCardCutDay}
+                      />
+                    </View>
+
+                    <View style={[styles.formField, { flex: 1 }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>PAYMENT DUE DATE (1 - 31)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        placeholder="e.g. 5 (5th of next month)"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={newCardDueDay}
+                        onChangeText={setNewCardDueDay}
+                      />
+                    </View>
+                  </View>
+
+                  {/* 4. KEEP TRACK RATIO SLIDER (Smooth interactive slider) */}
+                  <View style={[styles.sliderBox, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.sliderHeader, { color: colors.textPrimary }]}>
+                        Target Max Utilization (Keep Track Ratio)
+                      </Text>
+                      <View style={[styles.ratioBadge, { backgroundColor: colors.primaryLight }]}>
+                        <Text style={[styles.ratioBadgeText, { color: colors.primary }]}>{newCardKeepTrackRatio}%</Text>
+                      </View>
+                    </View>
+
+                    <Text style={[styles.sliderSub, { color: colors.textMuted }]}>
+                      Choose your comfort ceiling. Amber caution activates halfway to this target.
+                    </Text>
+
+                    {/* Smooth Slider Control (Web standard HTML range slider + quick preset pills) */}
+                    {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                      <View style={{ marginVertical: 10 }}>
+                        <input
+                          type="range"
+                          min="10"
+                          max="100"
+                          step="5"
+                          value={newCardKeepTrackRatio}
+                          onChange={(e: any) => setNewCardKeepTrackRatio(Number(e.target.value))}
+                          style={{
+                            width: '100%',
+                            height: '8px',
+                            borderRadius: '4px',
+                            background: `linear-gradient(to right, #10B981 0%, #10B981 ${greenThreshold}%, #F59E0B ${greenThreshold}%, #F59E0B ${yellowThreshold}%, #EF4444 ${yellowThreshold}%, #EF4444 100%)`,
+                            outline: 'none',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      </View>
+                    ) : null}
+
+                    {/* Quick Preset Buttons for Mobile or Quick Click */}
+                    <View style={styles.quickRatioRow}>
+                      {[30, 40, 50, 60, 75].map((pct) => (
+                        <TouchableOpacity
+                          key={pct}
+                          style={[
+                            styles.quickRatioBtn,
+                            {
+                              backgroundColor: newCardKeepTrackRatio === pct ? colors.primary : colors.background,
+                              borderColor: newCardKeepTrackRatio === pct ? colors.primary : colors.borderSubtle,
+                            },
+                          ]}
+                          onPress={() => setNewCardKeepTrackRatio(pct)}
+                        >
+                          <Text
+                            style={[
+                              styles.quickRatioBtnText,
+                              { color: newCardKeepTrackRatio === pct ? '#FFFFFF' : colors.textPrimary },
+                            ]}
+                          >
+                            {pct}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Dynamic Threshold Legend */}
+                    <View style={styles.thresholdLegend}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
+                          Green (Safe): <Text style={{ color: '#10B981', fontWeight: '700' }}>0% – {greenThreshold}%</Text>
+                        </Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
+                          Amber (Caution): <Text style={{ color: '#B45309', fontWeight: '700' }}>{greenThreshold}% – {yellowThreshold}%</Text>
+                        </Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
+                          Red (Alert): <Text style={{ color: '#EF4444', fontWeight: '700' }}>&gt; {yellowThreshold}%</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* 5. Card Skin Theme */}
+                  <View style={styles.formField}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CARD VISUAL THEME</Text>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                      {[
+                        { id: 'EMERALD' as const, label: 'Emerald', color: '#0F4C3A' },
+                        { id: 'PURPLE' as const, label: 'Purple', color: '#581C87' },
+                        { id: 'CARAMEL' as const, label: 'Caramel', color: '#78350F' },
+                      ].map((sk) => (
+                        <TouchableOpacity
+                          key={sk.id}
+                          style={[
+                            styles.skinOption,
+                            {
+                              borderColor: newCardColor === sk.id ? colors.primary : colors.borderSubtle,
+                              backgroundColor: newCardColor === sk.id ? colors.primaryLight : colors.surface,
+                            },
+                          ]}
+                          onPress={() => setNewCardColor(sk.id)}
+                        >
+                          <View style={[styles.skinDot, { backgroundColor: sk.color }]} />
+                          <Text style={[styles.skinLabel, { color: colors.textPrimary }]}>{sk.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Add Card Submit Button */}
+                  <TouchableOpacity
+                    style={[styles.addCardBtn, { backgroundColor: colors.primary }]}
+                    onPress={handleAddCard}
+                  >
+                    <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.addCardBtnText}>Add This Credit Card</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Bottom Navigation */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('SALARY')}>
+                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
+                      onPress={() => setCurrentStep('SALARY')}
+                    >
+                      <Text style={styles.primaryBtnText}>Continue to Income</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* STEP 4: INCOME (SALARIED VS OTHER PAYMENTS) */}
+            {currentStep === 'SALARY' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                  <Ionicons name="cash" size={14} color="#15803D" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 4 • INCOME & EARNINGS TYPE</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>How Do You Receive Income?</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Choose your earnings structure to customize monthly projections.
+                </Text>
+
+                {/* 2 Clear Options: Salaried vs Other Payments */}
+                <View style={{ gap: 12, marginBottom: 16 }}>
+                  {/* Option 1: Salaried Employee */}
+                  <TouchableOpacity
+                    style={[
+                      styles.incomeTypeCard,
+                      {
+                        backgroundColor: incomeType === 'SALARIED' ? colors.primaryLight : colors.background,
+                        borderColor: incomeType === 'SALARIED' ? colors.primary : colors.borderSubtle,
+                      },
+                    ]}
+                    onPress={() => setIncomeType('SALARIED')}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.incomeIconBox, { backgroundColor: '#DCFCE7' }]}>
+                          <Ionicons name="briefcase-outline" size={18} color="#15803D" />
+                        </View>
+                        <View>
+                          <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
+                            Salaried Employee (Regular Monthly Inflow)
+                          </Text>
+                          <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>
+                            Fixed monthly salary credited on a specific date.
+                          </Text>
+                        </View>
+                      </View>
+                      <Ionicons
+                        name={incomeType === 'SALARIED' ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={incomeType === 'SALARIED' ? colors.primary : colors.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Option 2: Freelance / Other Payments */}
+                  <TouchableOpacity
+                    style={[
+                      styles.incomeTypeCard,
+                      {
+                        backgroundColor: incomeType === 'OTHER' ? colors.primaryLight : colors.background,
+                        borderColor: incomeType === 'OTHER' ? colors.primary : colors.borderSubtle,
+                      },
+                    ]}
+                    onPress={() => setIncomeType('OTHER')}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.incomeIconBox, { backgroundColor: '#EDE9FE' }]}>
+                          <Ionicons name="cash-outline" size={18} color="#7C3AED" />
+                        </View>
+                        <View>
+                          <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
+                            Freelance / Variable Income / Other Payments
+                          </Text>
+                          <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>
+                            No regular fixed salary date. Income arrives as deposits.
+                          </Text>
+                        </View>
+                      </View>
+                      <Ionicons
+                        name={incomeType === 'OTHER' ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={incomeType === 'OTHER' ? colors.primary : colors.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Salaried Mode: Inputs for monthly salary and payday */}
+                {incomeType === 'SALARIED' ? (
+                  <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                    <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>Salary Details</Text>
+
+                    <View style={styles.formField}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>EXPECTED MONTHLY SALARY (₹)</Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        value={salaryAmount}
+                        onChangeText={setSalaryAmount}
+                        placeholder="e.g. 148000"
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    <View style={styles.formField}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                        SALARY RECEIVE DATE OF MONTH (1 - 31)
+                      </Text>
+                      <TextInput
+                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        value={salaryDay}
+                        onChangeText={setSalaryDay}
+                        placeholder="e.g. 1 (1st of month)"
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Linked Bank Selection if banks exist */}
+                    {banks.length > 0 && (
+                      <View style={styles.formField}>
+                        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SALARY CREDITED TO BANK</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                          {banks.map((b) => {
+                            const isSelected = selectedSalaryBank === b.name;
+                            return (
+                              <TouchableOpacity
+                                key={b.id}
+                                style={[
+                                  styles.quickRatioBtn,
+                                  {
+                                    backgroundColor: isSelected ? colors.primary : colors.surface,
+                                    borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                                  },
+                                ]}
+                                onPress={() => setSelectedSalaryBank(b.name)}
+                              >
+                                <Text style={{ color: isSelected ? '#FFFFFF' : colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
+                                  {b.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  /* Other Income Mode: Friendly Guidance Banner */
+                  <View style={[styles.guidanceCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                    <Ionicons name="information-circle" size={20} color="#15803D" style={{ marginRight: 10 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.guidanceTitle, { color: '#15803D' }]}>
+                        Flexible Inflow Mode Active
+                      </Text>
+                      <Text style={[styles.guidanceSub, { color: '#166534' }]}>
+                        Whenever you receive client payouts, freelance fees, or dividends, simply tap '+ Add Entry' in the top header and record a 'Deposit / Inflow' to your account.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Bottom Navigation */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('DRIVE')}>
+                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
+                      onPress={() => setCurrentStep('DRIVE')}
+                    >
+                      <Text style={styles.primaryBtnText}>Continue to Drive Sync</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* STEP 5: GOOGLE DRIVE FOLDER & CADENCE */}
+            {currentStep === 'DRIVE' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                  <Ionicons name="logo-google" size={14} color="#15803D" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 5 • GOOGLE DRIVE STORAGE</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Google Drive Folder</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Zero 3rd-party database servers! Spreadsheets will be created and saved directly inside your personal Google Drive folder.
+                </Text>
+
+                {/* Folder Name Input */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>TARGET GOOGLE DRIVE FOLDER</Text>
+                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Ionicons name="folder-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      value={driveFolderName}
+                      onChangeText={setDriveFolderName}
+                      placeholder="Aegis Spendly"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>
+                    The app creates or uses this folder in your personal Google Drive.
+                  </Text>
+                </View>
+
+                {/* Sync Cadence Cards */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>SYNC CADENCE</Text>
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    {[
+                      {
+                        id: 'MANUAL' as SyncCadence,
+                        title: 'Manual (Web Default)',
+                        desc: 'Sync on-demand via the header button when finished entering transactions.',
+                      },
+                      {
+                        id: 'DAILY' as SyncCadence,
+                        title: 'Daily Scheduled (10:00 PM)',
+                        desc: 'Bundles all changes of the day and pushes once per day at 10 PM.',
+                      },
+                      {
+                        id: 'WEEKLY' as SyncCadence,
+                        title: 'Weekly Scheduled (Sunday)',
+                        desc: 'Pushes weekly batch every Sunday night at 11 PM.',
+                      },
+                    ].map((cad) => {
+                      const isSelected = syncCadence === cad.id;
+                      return (
+                        <TouchableOpacity
+                          key={cad.id}
+                          style={[
+                            styles.incomeTypeCard,
+                            {
+                              backgroundColor: isSelected ? colors.primaryLight : colors.background,
+                              borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                            },
+                          ]}
+                          onPress={() => setSyncCadence(cad.id)}
+                        >
+                          <Ionicons
+                            name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                            size={18}
+                            color={isSelected ? colors.primary : colors.textMuted}
+                            style={{ marginRight: 10 }}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.incomeTypeTitle,
+                                { color: isSelected ? colors.primary : colors.textPrimary },
+                              ]}
+                            >
+                              {cad.title}
+                            </Text>
+                            <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>{cad.desc}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Bottom Navigation */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
+                    onPress={() => setCurrentStep('SECURITY')}
+                  >
+                    <Text style={styles.primaryBtnText}>Continue to Auto-Lock</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* STEP 6: AUTO-LOCK SECURITY OPTIONS */}
+            {currentStep === 'SECURITY' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                  <Ionicons name="lock-closed" size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#B91C1C' }]}>STEP 6 • VAULT AUTO-LOCK FREQUENCY</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Auto-Lock Policy</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Decide when the webpage automatically locks itself with your Master PIN. Choose from 4 curated modes:
+                </Text>
+
+                {/* 4 Lock Policy Cards */}
+                <View style={{ gap: 10, marginBottom: 16 }}>
+                  {[
+                    {
+                      id: 'HIGH' as AutoLockPreset,
+                      title: 'Paranoid Security (1 Minute)',
+                      desc: 'Locks after 1 min idle AND immediately when switching browser tabs or minimizing.',
+                      tag: 'Shared Devices',
+                      icon: 'shield-half',
+                    },
+                    {
+                      id: 'BALANCED' as AutoLockPreset,
+                      title: 'Balanced (5 Minutes) — Recommended',
+                      desc: 'Locks after 5 min idle AND immediately when switching browser tabs.',
+                      tag: 'Default',
+                      icon: 'shield-checkmark',
+                    },
+                    {
+                      id: 'RELAXED' as AutoLockPreset,
+                      title: 'Relaxed (15 Minutes)',
+                      desc: 'Locks after 15 min idle. Does NOT lock on quick tab switches.',
+                      tag: 'Personal Laptops',
+                      icon: 'cafe-outline',
+                    },
+                    {
+                      id: 'EXTENDED' as AutoLockPreset,
+                      title: 'Extended Session (30 Minutes)',
+                      desc: 'Locks after 30 min idle. Tab switching remains uninterrupted.',
+                      tag: 'Dedicated Workspace',
+                      icon: 'laptop-outline',
+                    },
+                  ].map((p) => {
+                    const isSelected = selectedPreset === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[
+                          styles.presetCard,
+                          {
+                            backgroundColor: isSelected ? colors.primaryLight : colors.background,
+                            borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                          },
+                        ]}
+                        onPress={() => handleSelectPreset(p.id)}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons
+                              name={p.icon as any}
+                              size={18}
+                              color={isSelected ? colors.primary : colors.textSecondary}
+                            />
+                            <Text
+                              style={[
+                                styles.presetTitle,
+                                { color: isSelected ? colors.primary : colors.textPrimary },
+                              ]}
+                            >
+                              {p.title}
+                            </Text>
+                          </View>
+                          <View style={[styles.tagPill, { backgroundColor: isSelected ? colors.primary : '#F1F5F9' }]}>
+                            <Text style={[styles.tagText, { color: isSelected ? '#FFFFFF' : colors.textMuted }]}>
+                              {p.tag}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.presetDesc, { color: colors.textMuted }]}>{p.desc}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Fine-Tuning Switches */}
+                <View style={[styles.customToggleBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.customToggleHeader, { color: colors.textSecondary }]}>FINE-TUNE PREFERENCES</Text>
+
+                  <TouchableOpacity
+                    style={styles.toggleRow}
+                    onPress={() => {
+                      setAutoLockOnBlur(!autoLockOnBlur);
+                      setSelectedPreset('CUSTOM');
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
+                        Lock immediately on tab switch / window blur
+                      </Text>
+                      <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
+                        Hides sensitive financials whenever you switch tabs
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
+                      size={28}
+                      color={autoLockOnBlur ? colors.primary : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Inactivity Timeout</Text>
+                    <View style={styles.inactivityRow}>
+                      {[1, 5, 15, 30, 0].map((mins) => {
+                        const isSel = inactivityMinutes === mins;
+                        return (
+                          <TouchableOpacity
+                            key={mins}
+                            style={[
+                              styles.minutePill,
+                              {
+                                backgroundColor: isSel ? colors.primary : colors.surface,
+                                borderColor: isSel ? colors.primary : colors.borderSubtle,
+                              },
+                            ]}
+                            onPress={() => {
+                              setInactivityMinutes(mins);
+                              setSelectedPreset('CUSTOM');
+                            }}
+                          >
+                            <Text style={[styles.minutePillText, { color: isSel ? '#FFFFFF' : colors.textPrimary }]}>
+                              {mins === 0 ? 'Never' : `${mins}m`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Bottom Navigation */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
+                    onPress={() => setCurrentStep('CONFIRMATION')}
+                  >
+                    <Text style={styles.primaryBtnText}>Review & Finish</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* STEP 7: REVIEW & COMPLETE */}
+            {currentStep === 'CONFIRMATION' && (
+              <View>
+                <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                  <Ionicons name="checkmark-done-circle" size={14} color="#15803D" style={{ marginRight: 6 }} />
+                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>FINAL STEP • READY TO LAUNCH</Text>
+                </View>
+
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Your Aegis Spendly Vault</Text>
+                <Text style={[styles.sub, { color: colors.textMuted }]}>
+                  Everything is configured and encrypted. Review your personalized setup below:
+                </Text>
+
+                {/* Summary Cards */}
+                <View style={[styles.summaryCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Profile Identity</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                      {displayName} (@{username})
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Google Account</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{email}</Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Drive Folder</Text>
+                    <Text style={[styles.summaryVal, { color: colors.primary, fontWeight: '700' }]}>
+                      📁 {driveFolderName}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Bank Accounts</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                      {banks.length === 0 ? 'None added (can add later)' : `${banks.length} account${banks.length === 1 ? '' : 's'} added`}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Credit Cards</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                      {cards.length === 0 ? 'None added (can add later)' : `${cards.length} card${cards.length === 1 ? '' : 's'} configured`}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Income Type</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                      {incomeType === 'SALARIED' ? `Salaried (${formatRupee(parseFloat(salaryAmount) || 0)} on ${salaryDay}th)` : 'Flexible Inflow / Freelance'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Auto-Lock Policy</Text>
+                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                      {inactivityMinutes === 0 ? 'No idle lock' : `${inactivityMinutes}m idle`}
+                      {autoLockOnBlur ? ' + Tab blur lock' : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Bottom Navigation with Back and Launch */}
+                <View style={styles.bottomNavRow}>
+                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary, flex: 1, marginLeft: 14 }]}
+                    onPress={handleFinishOnboarding}
+                    disabled={isFinishing}
+                  >
+                    {isFinishing ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="rocket-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryBtnText}>Launch Spendly Vault</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -1032,9 +1395,12 @@ export const OnboardingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  scrollRoot: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+    minHeight: '100%',
   },
   container: {
     width: '100%',
@@ -1051,9 +1417,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1063,9 +1429,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   stepConnector: {
-    width: 22,
+    width: 20,
     height: 2,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
   },
   card: {
     borderRadius: 16,
@@ -1101,7 +1467,7 @@ const styles = StyleSheet.create({
   sub: {
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   formGroup: {
     marginBottom: 14,
@@ -1155,18 +1521,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  primaryBtn: {
-    flexDirection: 'row',
+  emptyNoticeBox: {
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 46,
-    borderRadius: 12,
-    marginTop: 8,
+    marginBottom: 16,
   },
-  primaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  emptyNoticeTitle: {
+    fontSize: 13,
     fontWeight: '700',
+  },
+  emptyNoticeSub: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
   },
   itemCard: {
     flexDirection: 'row',
@@ -1177,8 +1548,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   itemIconBox: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1194,78 +1565,162 @@ const styles = StyleSheet.create({
   removeBtn: {
     padding: 6,
   },
-  addBox: {
-    padding: 14,
+  formContainerCard: {
+    padding: 16,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 16,
   },
-  addBoxTitle: {
+  formCardHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  formField: {
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  fieldInput: {
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 13,
+  },
+  addCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  addCardBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sliderBox: {
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  sliderHeader: {
     fontSize: 12,
     fontWeight: '700',
   },
-  inputSimple: {
-    height: 38,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    fontSize: 13,
+  ratioBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  addBtnSmall: {
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+  ratioBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sliderSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  quickRatioRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 8,
+  },
+  quickRatioBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtnSmallText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  quickRatioBtnText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  btnRow: {
+  thresholdLegend: {
+    gap: 4,
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
   },
-  skipBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
-  skipBtnText: {
-    fontSize: 13,
+  legendText: {
+    fontSize: 11,
+  },
+  skinOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+  },
+  skinDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  skinLabel: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  toggleCard: {
+  incomeTypeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
   },
-  toggleTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  toggleSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  cadenceCard: {
-    flexDirection: 'row',
+  incomeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
+    justifyContent: 'center',
   },
-  cadenceTitle: {
+  incomeTypeTitle: {
     fontSize: 13,
     fontWeight: '700',
   },
-  cadenceDesc: {
+  incomeTypeSub: {
     fontSize: 11,
     marginTop: 2,
+  },
+  guidanceCard: {
+    flexDirection: 'row',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  guidanceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  guidanceSub: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   presetCard: {
     padding: 14,
@@ -1349,5 +1804,51 @@ const styles = StyleSheet.create({
   summaryVal: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  bottomNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  skipBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  skipBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  primaryBtnSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    height: 42,
+    borderRadius: 10,
+  },
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

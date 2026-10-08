@@ -17,15 +17,18 @@ export class CreditMonitor {
   }
 
   /**
-   * Maps utilization percentage to dynamic status tiers.
-   * Under 15%: Optimal credit profile (calm green theme and safe indicator)
-   * 15% to 30%: Standard operational threshold (amber warning theme and caution indicator)
-   * Above 30%: High credit exposure hazard (red alert theme and debt warning indicator)
+   * Maps utilization percentage to dynamic status tiers based on user-provided keepTrackRatio.
+   * - Under 50% of target ratio: Optimal green indicator (e.g. for 60% target, green is 0% - 30%)
+   * - 50% to 100% of target ratio: Caution amber indicator (e.g. 30% - 60%)
+   * - Above target ratio: Alert red indicator (e.g. > 60%)
    */
-  public static evaluateStatusTier(utilizationPercentage: number): CreditStatusTier {
-    if (utilizationPercentage < 15) {
+  public static evaluateStatusTier(utilizationPercentage: number, keepTrackRatio: number = 30): CreditStatusTier {
+    const greenLimit = keepTrackRatio * 0.5;
+    const yellowLimit = keepTrackRatio;
+
+    if (utilizationPercentage < greenLimit) {
       return 'OPTIMAL';
-    } else if (utilizationPercentage <= 30) {
+    } else if (utilizationPercentage <= yellowLimit) {
       return 'CAUTION';
     } else {
       return 'ALERT';
@@ -43,8 +46,12 @@ export class CreditMonitor {
     const creditLimit = typeof account.credit_limit === 'number' && Number.isFinite(account.credit_limit) ? account.credit_limit : 0;
     const currentDebt = Math.max(0, typeof account.balance === 'number' && Number.isFinite(account.balance) ? account.balance : 0);
     const utilization = this.calculateUtilization(currentDebt, creditLimit);
-    const tier = this.evaluateStatusTier(utilization);
+    const targetRatio = typeof account.keep_track_ratio === 'number' && Number.isFinite(account.keep_track_ratio) && account.keep_track_ratio > 0
+      ? account.keep_track_ratio
+      : 30; // default 30% for standard banking metric
+    const tier = this.evaluateStatusTier(utilization, targetRatio);
 
+    const halfRatio = Math.round(targetRatio * 0.5);
 
     switch (tier) {
       case 'OPTIMAL':
@@ -58,7 +65,7 @@ export class CreditMonitor {
           themeColor: '#10B981',
           backgroundColor: 'rgba(16, 185, 129, 0.12)',
           badgeLabel: 'Optimal',
-          description: 'Safe utilization profile under 15%',
+          description: `Safe utilization profile under ${halfRatio}% (Target: ${targetRatio}%)`,
         };
       case 'CAUTION':
         return {
@@ -71,7 +78,7 @@ export class CreditMonitor {
           themeColor: '#F59E0B',
           backgroundColor: 'rgba(245, 158, 11, 0.12)',
           badgeLabel: 'Caution',
-          description: 'Standard threshold (15% - 30%)',
+          description: `Approaching target threshold (${halfRatio}% - ${targetRatio}%)`,
         };
       case 'ALERT':
       default:
@@ -85,7 +92,7 @@ export class CreditMonitor {
           themeColor: '#EF4444',
           backgroundColor: 'rgba(239, 68, 68, 0.12)',
           badgeLabel: 'High Hazard',
-          description: 'High credit exposure exceeding 30%',
+          description: `Exceeded target threshold of ${targetRatio}%`,
         };
     }
   }
