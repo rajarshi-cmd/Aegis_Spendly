@@ -14,6 +14,7 @@
 | **[DEF-002](#def-002-add-entry-button-touches-screen-edge-on-tablet-rotation)** | Layout / Responsive | Medium | Navigation / Header / Action Buttons | "Add entry" button touches screen edge on rotation; does not autofit across phone & tablet sizes | 🟡 Logged (Open) |
 | **[DEF-003](#def-003-income-page-must-enforce-selecting-salary-credited-bank-to-proceed)** | Form Validation / Business Logic | Medium | Onboarding (Step 4 — Income) | Missing validation: user must be required to select at least one bank for salary credit before proceeding | 🟡 Logged (Open) |
 | **[DEF-004](#def-004-session-and-data-reset-on-complete-app-close-sent-back-to-onboarding)** | Data Persistence / Auth Architecture | 🔴 Critical (High) | Auth Lifecycle, CryptoVault & Local Storage | Closing app completely deletes session/profile, resetting user back to onboarding instead of preserving login and prompting for PIN | 🟡 Logged (Open) |
+| **[DEF-005](#def-005-sign-out-erases-vault-profiledata-and-pin-setup-lacks-security-importance-notice)** | Auth Architecture & UX Guidance | 🟠 High | Auth Lifecycle & PIN Setup Screen | Sign out must preserve vault data and allow re-opening via PIN; PIN setup must remind user that PIN is the sole recovery key | 🟡 Logged (Open) |
 
 ---
 
@@ -179,3 +180,47 @@ When the user completely closes / force-quits the app from the Android recent ap
 - Recommended fix when fix phase starts: Store auth session and user profile in native persistent storage:
   - Option A: Persist auth credentials, profile, and security preferences directly inside the persistent native SQLite database (`aegis_finance.db`, via an `app_kv_store` / `auth_session` table) which already works natively via `expo-sqlite`.
   - Option B: Integrate `@react-native-async-storage/async-storage` or `expo-secure-store` for native encrypted mobile key-value storage.
+
+---
+
+### DEF-005: Sign out erases vault profile/data and PIN setup lacks security importance notice
+
+- **Defect ID:** `DEF-005`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1)
+- **Component / Screen:**
+  - `app/src/presentation/hooks/useAuthSecurity.tsx` (`signOut` callback)
+  - `app/src/core/security/cryptoVault.ts` (`clearAuthSession`)
+  - `app/src/presentation/components/security/AuthGateScreen.tsx` (Existing user vault detection)
+  - `app/src/presentation/components/security/PinSetupScreen.tsx` (PIN creation screen & messaging)
+- **Defect Type:** Auth Architecture & UX Guidance
+- **Severity:** 🟠 **High**
+- **Priority:** **P1**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+1. When a user explicitly signs out, the application executes `clearAuthSession()`, which deletes the user's stored auth credentials, PIN salt, and hash. Consequently, their local device profile and financial vault become disconnected and cannot be fetched back or unlocked using their previously established Master PIN.
+2. In addition, during the PIN setup process in `PinSetupScreen.tsx`, there is no clear security reminder advising the user that this Master PIN is the vital recovery key for their local encrypted vault on this device and that their data remains safe even if they sign out.
+
+#### Expected Behavior
+- **Vault Preservation on Sign Out:** Signing out must only end the active session; it must **not** delete the user's profile, financial records, or PIN verification metadata from the device.
+- **Returning User Unlock:** When a user signs in again or opens the app, the app must identify their existing local vault and allow them to unlock it directly via their original Master PIN.
+- **PIN Importance Reminder:** During PIN creation on `PinSetupScreen`, display a prominent security notice highlighting:
+  - *"Your Master PIN is the master key for this vault. Your financial data is securely preserved on this device and can only be opened with this PIN, even after signing out. Remember your PIN carefully!"*
+
+#### Actual Behavior
+- `clearAuthSession()` removes the credentials and PIN hash from storage.
+- A user who signs out is treated as an unauthenticated user without an existing vault, losing direct PIN unlock capability for their existing records.
+- `PinSetupScreen.tsx` only shows generic helper text without warning the user of the critical security importance and non-recoverability of the Master PIN.
+
+#### Steps to Reproduce
+1. Complete PIN setup and onboarding.
+2. From the Lock screen or Settings drawer, tap **Sign out**.
+3. Attempt to sign back in or access the app.
+4. Notice the app treats the session as empty rather than offering immediate PIN-based vault unlocking for the existing profile.
+5. Also observe `PinSetupScreen.tsx` during PIN setup: no reminder is displayed regarding PIN importance or vault retention.
+
+#### Technical Analysis (For Fix Phase Reference)
+- Disentangle session logout from vault credential deletion in `useAuthSecurity.tsx` and `cryptoVault.ts`. Persist vault credentials in SQLite under user identifier.
+- When `signOut()` is called, only clear the active unencrypted session state (`authStatus: 'UNAUTHENTICATED'`), while retaining the user's profile and hashed PIN in permanent storage so returning with the same account immediately routes to `LOCKED` (PIN unlock) rather than new account onboarding.
+- Update `PinSetupScreen.tsx` with an alert/banner card explaining the importance of the Master PIN for accessing device data.
