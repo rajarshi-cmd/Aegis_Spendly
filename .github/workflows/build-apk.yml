@@ -1,0 +1,80 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 🟢 Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - name: 📦 Install App Dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: 🧪 Run Security & Unit Tests
+        working-directory: app
+        run: npm test -- --watchAll=false
+
+      - name: ⚙️ Setup Android SDK & Expo Prebuild
+        working-directory: app
+        run: |
+          npx expo prebuild --platform android --no-install
+
+      - name: 🔨 Build Android Release APK
+        working-directory: app/android
+        run: |
+          ./gradlew assembleRelease --no-daemon
+
+      - name: 🏷️ Determine Release Tag
+        id: vars
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_NAME=v1.0.0-$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🚀 Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.TAG_NAME }}
+          name: Aegis Spendly ${{ steps.vars.outputs.TAG_NAME }}
+          body: |
+            ### 📱 Aegis Spendly Android APK Release
+            - **Package Name**: `com.aegis.spendly`
+            - **Architecture**: Universal Android Release (`arm64-v8a`, `armeabi-v7a`, `x86_64`)
+            - **Offline Storage**: Encrypted SQLite with PBKDF2 Master PIN
+            
+            #### 🔄 How to Install or Update:
+            1. Download `spendly-release.apk` below directly onto your Android device.
+            2. Tap to open and tap **Install** (or **Update** if already installed).
+            3. Existing local accounts, balances, and transaction records will be preserved during updates.
+          files: |
+            app/android/app/build/outputs/apk/release/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
