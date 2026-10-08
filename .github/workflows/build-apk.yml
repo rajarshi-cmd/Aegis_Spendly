@@ -48,6 +48,15 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon
 
+      - name: ✍️ Sign APK with Consistent Keystore
+        working-directory: app
+        run: |
+          APK_SRC=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "Found compiled APK: $APK_SRC"
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore spendly-release.keystore -storepass spendlypass123 -keypass spendlypass123 "$APK_SRC" spendly
+          cp "$APK_SRC" spendly-release.apk
+          echo "Release APK prepared at app/spendly-release.apk"
+
       - name: 🏷️ Determine Release Tag
         id: vars
         run: |
@@ -73,7 +82,7 @@ jobs:
             2. Tap to open and tap **Install** (or **Update** if already installed).
             3. Existing local accounts, balances, and transaction records will be preserved during updates.
           files: |
-            app/android/app/build/outputs/apk/release/app-release.apk
+            app/spendly-release.apk
           draft: false
           prerelease: false
         env:
