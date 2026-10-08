@@ -19,6 +19,7 @@ interface SpendlyHeaderProps {
   onOpenProfile: () => void;
   onOpenSettings: (securityUnlocked?: boolean) => void;
   onOpenSync?: () => void;
+  onOpenSideMenu?: () => void;
 }
 
 export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
@@ -30,6 +31,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenSync,
+  onOpenSideMenu,
 }) => {
   const { colors } = useTheme();
   const {
@@ -345,8 +347,21 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
         </>
       ) : (
         <View style={{ width: '100%', gap: 10 }}>
-          {/* Mobile Top Row: Greeting on left, Profile & Lock on right */}
+          {/* Mobile Top Row: Hamburger on left, Greeting in middle, Profile & Lock on right */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            {onOpenSideMenu && (
+              <TouchableOpacity
+                style={[
+                  styles.iconButton,
+                  { backgroundColor: colors.surface, borderColor: colors.borderSubtle, marginRight: 8 },
+                ]}
+                onPress={onOpenSideMenu}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="menu-outline" size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+            )}
+
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={[styles.greetingLabel, { color: colors.textMuted }]} numberOfLines={1}>{title}</Text>
               <Text style={[styles.mainSubtitle, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={1}>

@@ -64,9 +64,9 @@ export const OnboardingScreen: React.FC = () => {
   const [isFinishing, setIsFinishing] = useState(false);
 
   // Step 1: Identity fields
-  const [username, setUsername] = useState(user?.username || 'rajarshi');
-  const [displayName, setDisplayName] = useState(user?.name || 'Rajarshi Giri');
-  const [email, setEmail] = useState(user?.email || 'rajarshi250500@gmail.com');
+  const [username, setUsername] = useState(user?.username || '');
+  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [avatar, setAvatar] = useState<AvatarId>('Moon cat');
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
@@ -90,7 +90,7 @@ export const OnboardingScreen: React.FC = () => {
 
   // Step 4: Income Type (Salaried vs Other Payments)
   const [incomeType, setIncomeType] = useState<'SALARIED' | 'OTHER'>('SALARIED');
-  const [salaryAmount, setSalaryAmount] = useState('148000');
+  const [salaryAmount, setSalaryAmount] = useState('');
   const [salaryDay, setSalaryDay] = useState('1');
   const [selectedSalaryBank, setSelectedSalaryBank] = useState<string>('');
 
@@ -363,7 +363,7 @@ export const OnboardingScreen: React.FC = () => {
       // 2. Update User Profile
       const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');
       const profileUpdates: Partial<UserProfile> = {
-        name: displayName.trim() || 'Rajarshi Giri',
+        name: displayName.trim() || cleanUsername || 'User',
         username: cleanUsername,
         handle: `@${cleanUsername}`,
         email: email.trim(),

@@ -16,14 +16,14 @@ export interface UserProfile {
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
-  name: 'Rajarshi Giri',
-  username: 'rajarshi',
-  handle: '@rajarshi',
-  email: 'rajarshi250500@gmail.com',
+  name: '',
+  username: '',
+  handle: '',
+  email: '',
   avatar: 'Moon cat',
-  salary_amount: 148000,
+  salary_amount: 0,
   salary_day: 1,
-  salary_account_id: 'bank-icici',
+  salary_account_id: '',
   isOnboarded: false,
   driveFolderId: 'aegis-spendly-folder',
   driveFolderName: 'Aegis Spendly',

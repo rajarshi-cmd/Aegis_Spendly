@@ -53,9 +53,9 @@ export const BanksScreen: React.FC<BanksScreenProps> = ({
         diffText: `${formatRupee(Math.abs(diff))} deficit`,
       };
     }
-    if (diff < minBal * 0.25) {
+    if (diff <= minBal * 0.10) {
       return {
-        label: 'Near minimum',
+        label: 'Near minimum (Amber)',
         color: colors.warningText,
         dotBg: colors.warning,
         isAbove: true,

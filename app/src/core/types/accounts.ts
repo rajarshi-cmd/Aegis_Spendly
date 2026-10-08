@@ -32,6 +32,7 @@ export interface CreateAccountInput {
 export interface UpdateAccountInput {
   id: string;
   name?: string;
+  balance?: number | null;
   credit_limit?: number | null;
   billing_cycle_cut_day?: number | null;
   payment_due_day?: number | null;

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, theme } from '../../../presentation/theme';
 import { Account, UpdateAccountInput } from '../../../core/types';
+import { formatRupee } from '../../../core/utils/currency';
 import { useFinanceData } from '../../../presentation/hooks/useFinanceData';
 import { DeleteModal } from '../../../presentation/components/modals/DeleteModal';
 import { ReassignAndCloseModal } from '../../../presentation/components/modals/ReassignAndCloseModal';
@@ -56,6 +57,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
   const hasLinkedItems = accountLinkedObs.length > 0 || accountLinkedSips.length > 0;
 
   const [name, setName] = useState<string>(account.name);
+  const [currentBalance, setCurrentBalance] = useState<string>(account.balance?.toString() || '0');
   const [creditLimit, setCreditLimit] = useState<string>(account.credit_limit?.toString() || '');
   const [billingCutDay, setBillingCutDay] = useState<string>(
     account.billing_cycle_cut_day?.toString() || ''
@@ -72,6 +74,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
   useEffect(() => {
     if (account) {
       setName(account.name);
+      setCurrentBalance(account.balance?.toString() || '0');
       setCreditLimit(account.credit_limit?.toString() || '');
       setBillingCutDay(account.billing_cycle_cut_day?.toString() || '');
       setPaymentDueDay(account.payment_due_day?.toString() || '');
@@ -82,12 +85,51 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
 
   const isCreditCard = account.type === 'CREDIT_CARD';
 
+  const numBal = parseFloat(currentBalance) || 0;
+  const numMab = parseFloat(minimumBalance) || 0;
+
+  const statusTier = useMemo(() => {
+    if (isCreditCard || numMab <= 0) return null;
+    const diff = numBal - numMab;
+    const threshold10 = numMab * 0.10;
+
+    if (diff < 0) {
+      return {
+        title: 'Deficit Alert (Below MAB)',
+        subtitle: `Balance is ₹${Math.abs(diff).toFixed(2)} under the required minimum of ₹${numMab.toFixed(2)}.`,
+        color: colors.danger,
+        bg: 'rgba(239, 68, 68, 0.12)',
+        border: 'rgba(239, 68, 68, 0.35)',
+        icon: 'alert-circle' as const,
+      };
+    }
+    if (diff <= threshold10) {
+      return {
+        title: 'Amber Warning (Within 10% of MAB)',
+        subtitle: `Balance is ₹${diff.toFixed(2)} above minimum (within 10% safety buffer).`,
+        color: '#F59E0B',
+        bg: 'rgba(245, 158, 11, 0.12)',
+        border: 'rgba(245, 158, 11, 0.4)',
+        icon: 'warning' as const,
+      };
+    }
+    return {
+      title: 'Healthy Buffer (Above MAB)',
+      subtitle: `Balance is ₹${diff.toFixed(2)} safely above the minimum threshold.`,
+      color: colors.successText || '#10B981',
+      bg: 'rgba(16, 185, 129, 0.12)',
+      border: 'rgba(16, 185, 129, 0.35)',
+      icon: 'checkmark-circle' as const,
+    };
+  }, [isCreditCard, numBal, numMab, colors]);
+
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Nickname Required', 'Please provide a valid account nickname.');
       return;
     }
 
+    let parsedBalance: number | null = null;
     let parsedLimit: number | null = null;
     let parsedCutDay: number | null = null;
     let parsedDueDay: number | null = null;
@@ -116,6 +158,16 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
         }
       }
     } else {
+      if (currentBalance.trim()) {
+        parsedBalance = parseFloat(currentBalance.trim());
+        if (isNaN(parsedBalance) || parsedBalance < 0) {
+          Alert.alert('Invalid Savings Balance', 'Please specify a valid non-negative balance.');
+          return;
+        }
+      } else {
+        parsedBalance = 0;
+      }
+
       if (minimumBalance.trim()) {
         parsedMinBalance = parseFloat(minimumBalance.trim());
         if (isNaN(parsedMinBalance) || parsedMinBalance < 0) {
@@ -130,6 +182,7 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
       await onSubmit({
         id: account.id,
         name: name.trim(),
+        balance: !isCreditCard ? (parsedBalance ?? 0) : undefined,
         credit_limit: isCreditCard ? parsedLimit : null,
         billing_cycle_cut_day: isCreditCard ? parsedCutDay : null,
         payment_due_day: isCreditCard ? parsedDueDay : null,
@@ -289,8 +342,27 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
                 </>
               ) : (
                 <>
+                  {/* Current Savings / Liquid Balance */}
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                    Current Savings / Liquid Balance (₹)
+                  </Text>
+                  <View style={[styles.amountInputWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <Text style={[styles.currencySymbol, { color: colors.primary }]}>₹</Text>
+                    <TextInput
+                      style={[styles.amountInput, { color: colors.textPrimary }]}
+                      keyboardType="decimal-pad"
+                      value={currentBalance}
+                      onChangeText={setCurrentBalance}
+                      placeholder="e.g. 50000.00"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <Text style={[styles.helperText, { color: colors.textMuted }]}>
+                    Update your available bank balance at any time. Changes take effect across your financial metrics.
+                  </Text>
+
                   {/* Minimum Balance Required */}
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Minimum Balance Required (₹)</Text>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Minimum Account Balance / MAB (₹)</Text>
                   <View style={[styles.amountInputWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
                     <Text style={[styles.currencySymbol, { color: colors.primary }]}>₹</Text>
                     <TextInput
@@ -303,8 +375,23 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
                     />
                   </View>
                   <Text style={[styles.helperText, { color: colors.textMuted }]}>
-                    The app alerts you if available liquid cash falls below this mandatory threshold.
+                    The app alerts you if available liquid cash falls within 10% or below this mandatory threshold.
                   </Text>
+
+                  {/* Amber / Red / Green Status Banner */}
+                  {statusTier && (
+                    <View style={[styles.statusBanner, { backgroundColor: statusTier.bg, borderColor: statusTier.border }]}>
+                      <Ionicons name={statusTier.icon} size={20} color={statusTier.color} />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={[styles.statusBannerTitle, { color: statusTier.color }]}>
+                          {statusTier.title}
+                        </Text>
+                        <Text style={[styles.statusBannerSub, { color: colors.textSecondary }]}>
+                          {statusTier.subtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </>
               )}
 
@@ -486,5 +573,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    marginBottom: theme.spacing.md,
+  },
+  statusBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  statusBannerSub: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

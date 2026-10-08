@@ -157,9 +157,9 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const existing = loadAuthSession();
     const newUser: AuthUser = {
       id: customDetails?.id || existing?.id || 'usr_google_' + Date.now().toString(36),
-      email: customDetails?.email || existing?.email || 'rajarshi250500@gmail.com',
-      name: customDetails?.name || existing?.name || 'Rajarshi Giri',
-      username: customDetails?.username || existing?.username,
+      email: customDetails?.email || existing?.email || '',
+      name: customDetails?.name || existing?.name || '',
+      username: customDetails?.username || existing?.username || '',
       photoUrl: customDetails?.photoUrl || existing?.photoUrl,
       pinSalt: existing?.pinSalt,
       pinHash: existing?.pinHash,
@@ -235,9 +235,9 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const updatedUser: AuthUser = {
         ...user,
         isOnboarded: true,
-        username: details?.username || user.username || 'rajarshi',
-        name: details?.name || user.name,
-        email: details?.email || user.email,
+        username: details?.username || user.username || 'user',
+        name: details?.name || user.name || '',
+        email: details?.email || user.email || '',
         photoUrl: details?.photoUrl || user.photoUrl,
       };
       setUser(updatedUser);

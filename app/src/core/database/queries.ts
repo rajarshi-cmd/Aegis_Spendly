@@ -114,6 +114,7 @@ export async function updateAccount(
 
   const now = new Date().toISOString();
   const name = input.name !== undefined ? input.name : current.name;
+  const balance = input.balance !== undefined && input.balance !== null ? input.balance : current.balance;
   const creditLimit = input.credit_limit !== undefined ? input.credit_limit : current.credit_limit;
   const cutDay = input.billing_cycle_cut_day !== undefined ? input.billing_cycle_cut_day : current.billing_cycle_cut_day;
   const dueDay = input.payment_due_day !== undefined ? input.payment_due_day : current.payment_due_day;
@@ -125,22 +126,23 @@ export async function updateAccount(
   try {
     await db.run(
       `UPDATE accounts 
-       SET name = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, keep_track_ratio = ?, card_color = ?, last4 = ?, updated_at = ?
+       SET name = ?, balance = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, keep_track_ratio = ?, card_color = ?, last4 = ?, updated_at = ?
        WHERE id = ?;`,
-      [name, creditLimit, cutDay, dueDay, minBalance, keepTrackRatio, cardColor, last4, now, input.id]
+      [name, balance, creditLimit, cutDay, dueDay, minBalance, keepTrackRatio, cardColor, last4, now, input.id]
     );
   } catch {
     await db.run(
       `UPDATE accounts 
-       SET name = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, card_color = ?, last4 = ?, updated_at = ?
+       SET name = ?, balance = ?, credit_limit = ?, billing_cycle_cut_day = ?, payment_due_day = ?, minimum_balance = ?, card_color = ?, last4 = ?, updated_at = ?
        WHERE id = ?;`,
-      [name, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, input.id]
+      [name, balance, creditLimit, cutDay, dueDay, minBalance, cardColor, last4, now, input.id]
     );
   }
 
   return {
     ...current,
     name,
+    balance,
     credit_limit: creditLimit,
     billing_cycle_cut_day: cutDay,
     payment_due_day: dueDay,
