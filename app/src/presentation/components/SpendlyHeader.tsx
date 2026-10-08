@@ -102,7 +102,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
   const isDesktop = width >= 768;
 
   const getSubtitles = (): { title: string; subtitle: string } => {
-    const firstName = profile.name.split(' ')[0].toUpperCase();
+    const firstName = ((profile.name || profile.username || 'User').split(' ')[0] || 'USER').toUpperCase();
     switch (activeTab) {
       case 'OVERVIEW':
         return {
@@ -292,9 +292,25 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
           activeOpacity={0.8}
         >
           <View style={[styles.avatarIconBox, { backgroundColor: colors.primaryLight }]}>
-            <Ionicons name="paw" size={13} color={colors.primary} />
+            <Ionicons
+              name={
+                profile.avatar === 'Forest rabbit'
+                  ? 'leaf'
+                  : profile.avatar === 'Little ghost'
+                  ? 'happy'
+                  : profile.avatar === 'Star mage'
+                  ? 'sparkles'
+                  : profile.avatar === 'Custom Google'
+                  ? 'logo-google'
+                  : 'paw'
+              }
+              size={13}
+              color={colors.primary}
+            />
           </View>
-          <Text style={[styles.profileName, { color: colors.textPrimary }]}>{profile.name.split(' ')[0]}</Text>
+          <Text style={[styles.profileName, { color: colors.textPrimary }]}>
+            {(profile.name || profile.username || 'User').split(' ')[0]}
+          </Text>
           <Ionicons name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4 }} />
         </TouchableOpacity>
 

@@ -18,6 +18,8 @@ export interface SyncScheduleConfig {
   spreadsheetId: string | null;
   spreadsheetTitle: string;
   spreadsheetUrl: string | null;
+  driveFolderId: string | null;
+  driveFolderName: string;
   googleEmail: string | null;
   isConnected: boolean;
   autoSyncEnabled: boolean;
@@ -91,6 +93,7 @@ export interface SyncResult {
   createdTabs: string[];
   updatedTabs: string[];
   spreadsheetUrl: string;
+  driveFolderName?: string;
   error?: string;
 }
 
@@ -103,7 +106,43 @@ export const DEFAULT_SYNC_CONFIG: SyncScheduleConfig = {
   spreadsheetId: 'aegis-finance-ledger-live',
   spreadsheetTitle: 'Aegis Finance - Personal Ledger',
   spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1AegisFinancePersonalLedgerTemplate',
-  googleEmail: 'aarav.mehta@gmail.com',
+  driveFolderId: 'aegis-spendly-folder',
+  driveFolderName: 'Aegis Spendly',
+  googleEmail: 'rajarshi250500@gmail.com',
   isConnected: true,
   autoSyncEnabled: true,
 };
+
+const SYNC_CONFIG_STORAGE_KEY = 'aegis_sync_config_data';
+let memorySyncConfigStorage: string | null = null;
+
+export function saveSyncConfig(config: SyncScheduleConfig): void {
+  try {
+    const data = JSON.stringify(config);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(SYNC_CONFIG_STORAGE_KEY, data);
+    } else {
+      memorySyncConfigStorage = data;
+    }
+  } catch (e) {
+    console.warn('[SyncConfig] Failed to save sync config', e);
+  }
+}
+
+export function loadSyncConfig(): SyncScheduleConfig | null {
+  try {
+    let data: string | null = null;
+    if (typeof localStorage !== 'undefined') {
+      data = localStorage.getItem(SYNC_CONFIG_STORAGE_KEY);
+    } else {
+      data = memorySyncConfigStorage;
+    }
+    if (data) {
+      return JSON.parse(data) as SyncScheduleConfig;
+    }
+  } catch (e) {
+    console.warn('[SyncConfig] Failed to load sync config', e);
+  }
+  return null;
+}
+

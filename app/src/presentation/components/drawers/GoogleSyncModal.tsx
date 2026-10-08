@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Modal,
   StyleSheet,
@@ -58,6 +59,7 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
   const [dailyTime, setDailyTime] = useState<string>(syncConfig.dailyTime);
   const [weeklyDay, setWeeklyDay] = useState<DayOfWeek>(syncConfig.weeklyDay);
   const [weeklyTime, setWeeklyTime] = useState<string>(syncConfig.weeklyTime);
+  const [driveFolderName, setDriveFolderName] = useState<string>(syncConfig.driveFolderName || 'Aegis Spendly');
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Compute next scheduled sync
@@ -91,8 +93,9 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
       dailyTime,
       weeklyDay,
       weeklyTime,
+      driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
     });
-    setSyncToast('Schedule preferences updated ✓');
+    setSyncToast('Schedule and folder preferences updated ✓');
     setTimeout(() => {
       setSyncToast(null);
       onClose();
@@ -172,8 +175,24 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
                 </TouchableOpacity>
               </View>
 
+              <View style={[styles.sheetLinkRow, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, marginTop: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetNameLabel, { color: colors.textMuted }]}>TARGET GOOGLE DRIVE FOLDER</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Ionicons name="folder" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 }}
+                      value={driveFolderName}
+                      onChangeText={setDriveFolderName}
+                      placeholder="Aegis Spendly"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                </View>
+              </View>
+
               <Text style={[styles.rateLimitNote, { color: colors.textMuted }]}>
-                💡 <Text style={{ fontWeight: '700' }}>Quota Protection Active:</Text> Data is stored on-device in SQLite. Changes are bundled into single batch updates during scheduled syncs or manual click, preventing API rate limits.
+                💡 <Text style={{ fontWeight: '700' }}>Zero 3rd-Party Database Server:</Text> Data is stored on-device in SQLite and pushed straight to your private Google Drive folder above. No external databases, full privacy.
               </Text>
             </View>
 

@@ -38,6 +38,8 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   const { colors } = useTheme();
 
   const [name, setName] = useState(profile.name);
+  const [username, setUsername] = useState(profile.username || 'rajarshi');
+  const [driveFolder, setDriveFolder] = useState(profile.driveFolderName || 'Aegis Spendly');
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(profile.avatar);
   const [salaryAmount, setSalaryAmount] = useState(profile.salary_amount.toString());
   const [salaryDay, setSalaryDay] = useState(profile.salary_day.toString().padStart(2, '0'));
@@ -52,6 +54,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     { id: 'Forest rabbit', label: 'Forest rabbit', icon: 'leaf' },
     { id: 'Little ghost', label: 'Little ghost', icon: 'happy' },
     { id: 'Star mage', label: 'Star mage', icon: 'sparkles' },
+    { id: 'Custom Google', label: 'Custom Google', icon: 'logo-google' },
   ];
 
   const handleSaveSalary = () => {
@@ -67,8 +70,12 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   };
 
   const handleDone = () => {
+    const cleanUser = username.trim().toLowerCase().replace(/^@/, '');
     onUpdateProfile({
       name: name.trim() || profile.name,
+      username: cleanUser || profile.username,
+      handle: `@${cleanUser || profile.username}`,
+      driveFolderName: driveFolder.trim() || 'Aegis Spendly',
       avatar: selectedAvatar,
     });
     onClose();
@@ -98,7 +105,21 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                 {/* Profile Banner Card */}
                 <View style={[styles.profileBanner, { backgroundColor: colors.primaryLight }]}>
                   <View style={[styles.bannerAvatar, { backgroundColor: colors.surface }]}>
-                    <Ionicons name="paw" size={24} color={colors.primary} />
+                    <Ionicons
+                      name={
+                        selectedAvatar === 'Forest rabbit'
+                          ? 'leaf'
+                          : selectedAvatar === 'Little ghost'
+                          ? 'happy'
+                          : selectedAvatar === 'Star mage'
+                          ? 'sparkles'
+                          : selectedAvatar === 'Custom Google'
+                          ? 'logo-google'
+                          : 'paw'
+                      }
+                      size={24}
+                      color={colors.primary}
+                    />
                   </View>
                   <View style={{ marginLeft: 14 }}>
                     <Text style={[styles.bannerName, { color: colors.textPrimary }]}>{profile.name}</Text>
@@ -118,9 +139,35 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                     />
                   </View>
                 </View>
-                <View style={[styles.readOnlyWrap, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                  <Ionicons name="person-outline" size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
-                  <Text style={[styles.readOnlyText, { color: colors.textMuted }]}>User ID: {profile.handle}</Text>
+
+                <View style={styles.formRow}>
+                  <View style={styles.formCol}>
+                    <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Vault Username</Text>
+                    <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', borderColor: colors.border }]}>
+                      <Text style={{ color: colors.primary, fontWeight: '700', marginRight: 4 }}>@</Text>
+                      <TextInput
+                        style={{ flex: 1, color: colors.textPrimary }}
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.formRow}>
+                  <View style={styles.formCol}>
+                    <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Google Drive Storage Folder</Text>
+                    <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', borderColor: colors.border }]}>
+                      <Ionicons name="folder-outline" size={15} color={colors.primary} style={{ marginRight: 6 }} />
+                      <TextInput
+                        style={{ flex: 1, color: colors.textPrimary }}
+                        value={driveFolder}
+                        onChangeText={setDriveFolder}
+                        placeholder="Aegis Spendly"
+                      />
+                    </View>
+                  </View>
                 </View>
 
                 {/* Choose an Avatar */}

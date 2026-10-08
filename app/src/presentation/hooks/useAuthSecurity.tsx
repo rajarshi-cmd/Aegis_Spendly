@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
-import { AuthStatus, AuthUser, AuthSecurityConfig, DEFAULT_AUTH_CONFIG } from '../../core/types/auth';
+import {
+  AuthStatus,
+  AuthUser,
+  AuthSecurityConfig,
+  DEFAULT_AUTH_CONFIG,
+  saveSecurityConfig,
+  loadSecurityConfig,
+} from '../../core/types/auth';
 import {
   generateSalt,
   hashPin,
@@ -18,6 +25,7 @@ interface AuthSecurityContextType {
   signInWithGoogle: (customDetails?: Partial<AuthUser>) => Promise<void>;
   setupPin: (pin: string) => Promise<boolean>;
   unlockWithPin: (pin: string) => Promise<boolean>;
+  completeOnboarding: (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => void;
   lockSession: () => void;
   signOut: () => void;
 }
@@ -34,10 +42,18 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Initialize from storage on mount
   useEffect(() => {
     const saved = loadAuthSession();
+    const savedConfig = loadSecurityConfig();
+    if (savedConfig) {
+      setConfig(savedConfig);
+    }
     if (saved) {
       setUser(saved);
       if (saved.pinHash && saved.pinSalt) {
-        setAuthStatus('LOCKED'); // Require PIN on app open
+        if (saved.isOnboarded === false) {
+          setAuthStatus('ONBOARDING');
+        } else {
+          setAuthStatus('LOCKED'); // Require PIN on app open
+        }
       } else {
         setAuthStatus('PIN_SETUP');
       }
@@ -55,14 +71,14 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, []);
 
-  // Reset and restart the 5-minute inactivity timer
+  // Reset and restart the inactivity timer based on user config
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) {
       clearTimeout(idleTimerRef.current);
     }
 
-    if (authStatus === 'UNLOCKED') {
-      const timeoutMs = (config.inactivityTimeoutMinutes || 5) * 60 * 1000;
+    if (authStatus === 'UNLOCKED' && config.inactivityTimeoutMinutes > 0) {
+      const timeoutMs = config.inactivityTimeoutMinutes * 60 * 1000;
       idleTimerRef.current = setTimeout(() => {
         lockSession();
       }, timeoutMs);
@@ -142,16 +158,22 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
       id: customDetails?.id || existing?.id || 'usr_google_' + Date.now().toString(36),
       email: customDetails?.email || existing?.email || 'rajarshi250500@gmail.com',
       name: customDetails?.name || existing?.name || 'Rajarshi Giri',
+      username: customDetails?.username || existing?.username,
       photoUrl: customDetails?.photoUrl || existing?.photoUrl,
       pinSalt: existing?.pinSalt,
       pinHash: existing?.pinHash,
+      isOnboarded: existing?.isOnboarded ?? false,
     };
 
     setUser(newUser);
     saveAuthSession(newUser);
 
     if (newUser.pinHash && newUser.pinSalt) {
-      setAuthStatus('LOCKED');
+      if (newUser.isOnboarded === false) {
+        setAuthStatus('ONBOARDING');
+      } else {
+        setAuthStatus('LOCKED');
+      }
     } else {
       setAuthStatus('PIN_SETUP');
     }
@@ -171,7 +193,11 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       setUser(updatedUser);
       saveAuthSession(updatedUser);
-      setAuthStatus('UNLOCKED');
+      if (updatedUser.isOnboarded) {
+        setAuthStatus('UNLOCKED');
+      } else {
+        setAuthStatus('ONBOARDING');
+      }
       return true;
     },
     [user]
@@ -182,10 +208,32 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!user || !user.pinHash || !user.pinSalt) return false;
       const isValid = await verifyPin(pin, user.pinSalt, user.pinHash);
       if (isValid) {
-        setAuthStatus('UNLOCKED');
+        if (user.isOnboarded === false) {
+          setAuthStatus('ONBOARDING');
+        } else {
+          setAuthStatus('UNLOCKED');
+        }
         return true;
       }
       return false;
+    },
+    [user]
+  );
+
+  const completeOnboarding = useCallback(
+    (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => {
+      if (!user) return;
+      const updatedUser: AuthUser = {
+        ...user,
+        isOnboarded: true,
+        username: details?.username || user.username || 'rajarshi',
+        name: details?.name || user.name,
+        email: details?.email || user.email,
+        photoUrl: details?.photoUrl || user.photoUrl,
+      };
+      setUser(updatedUser);
+      saveAuthSession(updatedUser);
+      setAuthStatus('UNLOCKED');
     },
     [user]
   );
@@ -197,7 +245,11 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const updateConfig = useCallback((partial: Partial<AuthSecurityConfig>) => {
-    setConfig((prev) => ({ ...prev, ...partial }));
+    setConfig((prev) => {
+      const updated = { ...prev, ...partial };
+      saveSecurityConfig(updated);
+      return updated;
+    });
   }, []);
 
   return (
@@ -210,6 +262,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         signInWithGoogle,
         setupPin,
         unlockWithPin,
+        completeOnboarding,
         lockSession,
         signOut,
       }}

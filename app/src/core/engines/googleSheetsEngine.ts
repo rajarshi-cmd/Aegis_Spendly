@@ -261,6 +261,7 @@ export class GoogleSheetsSyncEngine {
       createdTabs,
       updatedTabs: createdTabs,
       spreadsheetUrl,
+      driveFolderName: config.driveFolderName || 'Aegis Spendly',
     };
   }
 }

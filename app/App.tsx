@@ -29,6 +29,7 @@ import { AuthSecurityProvider, useAuthSecurity } from './src/presentation/hooks/
 import { AuthGateScreen } from './src/presentation/components/security/AuthGateScreen';
 import { PinSetupScreen } from './src/presentation/components/security/PinSetupScreen';
 import { LockScreen } from './src/presentation/components/security/LockScreen';
+import { OnboardingScreen } from './src/presentation/components/onboarding/OnboardingScreen';
 
 const MainNavigator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTabKey>('OVERVIEW');
@@ -304,6 +305,10 @@ const SecurityGateNavigator: React.FC = () => {
 
   if (authStatus === 'PIN_SETUP') {
     return <PinSetupScreen />;
+  }
+
+  if (authStatus === 'ONBOARDING') {
+    return <OnboardingScreen />;
   }
 
   if (authStatus === 'LOCKED') {

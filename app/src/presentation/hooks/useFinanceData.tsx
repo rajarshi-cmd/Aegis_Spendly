@@ -32,8 +32,19 @@ import { AnalyticsEngine } from '../../core/engines/analyticsEngine';
 import { UpcomingEngine } from '../../core/engines/upcomingEngine';
 import { InvestmentEngine } from '../../core/engines/investmentEngine';
 import { GoogleSheetsSyncEngine } from '../../core/engines/googleSheetsEngine';
-import { UserProfile, DEFAULT_PROFILE } from '../../core/types/profile';
-import { SyncScheduleConfig, DEFAULT_SYNC_CONFIG, SyncResult } from '../../core/types/sync';
+import {
+  UserProfile,
+  DEFAULT_PROFILE,
+  loadUserProfile,
+  saveUserProfile,
+} from '../../core/types/profile';
+import {
+  SyncScheduleConfig,
+  DEFAULT_SYNC_CONFIG,
+  SyncResult,
+  loadSyncConfig,
+  saveSyncConfig,
+} from '../../core/types/sync';
 import {
   Account,
   Transaction,
@@ -152,11 +163,15 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [pastCommitments, setPastCommitments] = useState<RecurringObligation[]>([]);
   const [investments, setInvestments] = useState<InvestmentAsset[]>([]);
   const [plannedBudgets, setPlannedBudgets] = useState<PlannedBudget[]>(DEFAULT_BUDGETS);
-  const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    return loadUserProfile() || DEFAULT_PROFILE;
+  });
   const [activeMonth, setActiveMonth] = useState<string>('October 2026');
 
   // Google Sheets Cloud Sync & Schedule state
-  const [syncConfig, setSyncConfig] = useState<SyncScheduleConfig>(DEFAULT_SYNC_CONFIG);
+  const [syncConfig, setSyncConfig] = useState<SyncScheduleConfig>(() => {
+    return loadSyncConfig() || DEFAULT_SYNC_CONFIG;
+  });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
 
@@ -214,7 +229,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [loadData]);
 
   const updateProfile = (partial: Partial<UserProfile>) => {
-    setUserProfile((prev) => ({ ...prev, ...partial }));
+    setUserProfile((prev) => {
+      const updated = { ...prev, ...partial };
+      saveUserProfile(updated);
+      return updated;
+    });
   };
 
   const addTransaction = async (input: CreateTransactionInput): Promise<Transaction> => {
@@ -593,7 +612,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [transactions, syncConfig.lastSyncTimestamp]);
 
   const updateSyncConfig = (partial: Partial<SyncScheduleConfig>) => {
-    setSyncConfig((prev) => ({ ...prev, ...partial }));
+    setSyncConfig((prev) => {
+      const updated = { ...prev, ...partial };
+      saveSyncConfig(updated);
+      return updated;
+    });
   };
 
   const triggerGoogleSheetsSync = async (): Promise<SyncResult> => {

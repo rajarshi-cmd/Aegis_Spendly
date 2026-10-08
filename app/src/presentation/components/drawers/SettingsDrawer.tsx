@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemePresetName, THEME_PRESETS } from '../../theme';
+import { useAuthSecurity } from '../../hooks/useAuthSecurity';
+import { AutoLockPreset } from '../../../core/types/auth';
 
 interface SettingsDrawerProps {
   visible: boolean;
@@ -17,8 +19,14 @@ interface SettingsDrawerProps {
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose }) => {
   const { themeName, colors, setThemeName } = useTheme();
+  const { config: securityConfig, updateConfig: updateSecurityConfig } = useAuthSecurity();
 
   const [activePreset, setActivePreset] = useState<ThemePresetName>(themeName);
+  const [autoLockOnBlur, setAutoLockOnBlur] = useState(securityConfig.autoLockOnBlur);
+  const [inactivityMinutes, setInactivityMinutes] = useState(securityConfig.inactivityTimeoutMinutes);
+  const [selectedLockPreset, setSelectedLockPreset] = useState<AutoLockPreset>(
+    securityConfig.lockPreset || 'BALANCED'
+  );
 
   const presets: { id: ThemePresetName; label: string; dotColor: string }[] = [
     { id: 'Soft Mint', label: 'Soft Mint', dotColor: '#0F4C3A' },
@@ -27,8 +35,37 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
     { id: 'Lavender', label: 'Lavender', dotColor: '#6D28D9' },
   ];
 
+  const handleSelectLockPreset = (preset: AutoLockPreset) => {
+    setSelectedLockPreset(preset);
+    switch (preset) {
+      case 'HIGH':
+        setAutoLockOnBlur(true);
+        setInactivityMinutes(1);
+        break;
+      case 'BALANCED':
+        setAutoLockOnBlur(true);
+        setInactivityMinutes(5);
+        break;
+      case 'RELAXED':
+        setAutoLockOnBlur(false);
+        setInactivityMinutes(15);
+        break;
+      case 'EXTENDED':
+        setAutoLockOnBlur(false);
+        setInactivityMinutes(30);
+        break;
+      case 'CUSTOM':
+        break;
+    }
+  };
+
   const handleSave = () => {
     setThemeName(activePreset);
+    updateSecurityConfig({
+      autoLockOnBlur,
+      inactivityTimeoutMinutes: inactivityMinutes,
+      lockPreset: selectedLockPreset,
+    });
     onClose();
   };
 
@@ -37,122 +74,246 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[styles.drawerSheet, { backgroundColor: colors.surface }]} pointerEvents="auto">
-              {/* Header */}
-              <View style={[styles.drawerHeader, { borderBottomColor: colors.borderSubtle }]}>
-                <View>
-                  <Text style={[styles.microHeader, { color: colors.textMuted }]}>WORKSPACE APPEARANCE</Text>
-                  <Text style={[styles.drawerTitle, { color: colors.textPrimary }]}>Settings</Text>
-                </View>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                  <Ionicons name="close" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+          {/* Header */}
+          <View style={[styles.drawerHeader, { borderBottomColor: colors.borderSubtle }]}>
+            <View>
+              <Text style={[styles.microHeader, { color: colors.textMuted }]}>WORKSPACE PREFERENCES</Text>
+              <Text style={[styles.drawerTitle, { color: colors.textPrimary }]}>Settings</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* 1. Theme & Appearance Section */}
+            <View style={[styles.bannerCard, { backgroundColor: colors.primaryLight, borderColor: colors.borderSubtle }]}>
+              <Ionicons name="color-palette-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.bannerTitle, { color: colors.textPrimary }]}>Every color, in one place</Text>
+                <Text style={[styles.bannerDesc, { color: colors.textSecondary }]}>
+                  Presets and custom tokens update panels, type, borders, headers, and buttons.
+                </Text>
               </View>
+            </View>
 
-              <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Banner */}
-                <View style={[styles.bannerCard, { backgroundColor: colors.primaryLight, borderColor: colors.borderSubtle }]}>
-                  <Ionicons name="color-palette-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.bannerTitle, { color: colors.textPrimary }]}>Every color, in one place</Text>
-                    <Text style={[styles.bannerDesc, { color: colors.textSecondary }]}>
-                      Presets and custom tokens now update panels, type, borders, headers, and buttons.
+            {/* Theme Preset Cards */}
+            <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>THEME PRESET</Text>
+            <View style={styles.presetsGrid}>
+              {presets.map((p) => {
+                const isSelected = activePreset === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.presetCard,
+                      {
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        backgroundColor: isSelected ? colors.primaryLight : colors.surface,
+                      },
+                    ]}
+                    onPress={() => setActivePreset(p.id)}
+                  >
+                    <View style={[styles.presetDot, { backgroundColor: p.dotColor }]} />
+                    <Text
+                      style={[
+                        styles.presetLabel,
+                        { color: isSelected ? colors.primary : colors.textPrimary },
+                      ]}
+                    >
+                      {p.label}
                     </Text>
-                  </View>
-                </View>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={colors.primary}
+                        style={{ marginLeft: 'auto' }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-                {/* Theme Preset Cards */}
-                <View style={styles.presetsGrid}>
-                  {presets.map((p) => {
-                    const isSelected = activePreset === p.id;
-                    return (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={[
-                          styles.presetCard,
-                          {
-                            borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? colors.primaryLight : colors.surface,
-                          },
-                        ]}
-                        onPress={() => setActivePreset(p.id)}
-                      >
-                        <View style={[styles.presetDot, { backgroundColor: p.dotColor }]} />
+            {/* 2. VAULT AUTO-LOCK & SECURITY SECTION */}
+            <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 28 }]}>
+              VAULT AUTO-LOCK & SECURITY
+            </Text>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
+              Choose how often your private ledger locks with your Master PIN.
+            </Text>
+
+            <View style={styles.lockOptionsGrid}>
+              {[
+                {
+                  id: 'HIGH' as AutoLockPreset,
+                  title: 'Paranoid (1 Min)',
+                  desc: '1m idle + Locks immediately when switching tabs.',
+                  tag: 'Shared Devices',
+                  icon: 'shield-half',
+                },
+                {
+                  id: 'BALANCED' as AutoLockPreset,
+                  title: 'Balanced (5 Mins)',
+                  desc: '5m idle + Locks immediately when switching tabs.',
+                  tag: 'Recommended',
+                  icon: 'shield-checkmark',
+                },
+                {
+                  id: 'RELAXED' as AutoLockPreset,
+                  title: 'Relaxed (15 Mins)',
+                  desc: '15m idle. Quick tab switches do NOT lock vault.',
+                  tag: 'Personal Laptops',
+                  icon: 'cafe-outline',
+                },
+                {
+                  id: 'EXTENDED' as AutoLockPreset,
+                  title: 'Extended (30 Mins)',
+                  desc: '30m idle. Uninterrupted tab multitasking.',
+                  tag: 'Dedicated Desk',
+                  icon: 'laptop-outline',
+                },
+              ].map((item) => {
+                const isSelected = selectedLockPreset === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.lockCard,
+                      {
+                        borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                        backgroundColor: isSelected ? colors.primaryLight : colors.background,
+                      },
+                    ]}
+                    onPress={() => handleSelectLockPreset(item.id)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons
+                          name={item.icon as any}
+                          size={16}
+                          color={isSelected ? colors.primary : colors.textSecondary}
+                        />
                         <Text
                           style={[
-                            styles.presetLabel,
+                            styles.lockCardTitle,
                             { color: isSelected ? colors.primary : colors.textPrimary },
                           ]}
                         >
-                          {p.label}
+                          {item.title}
                         </Text>
-                        {isSelected && (
-                          <Ionicons
-                            name="checkmark"
-                            size={16}
-                            color={colors.primary}
-                            style={{ marginLeft: 'auto' }}
-                          />
-                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.lockCardBadge,
+                          { backgroundColor: isSelected ? colors.primary : '#E2E8F0' },
+                        ]}
+                      >
+                        <Text style={[styles.lockCardBadgeText, { color: isSelected ? '#FFFFFF' : '#475569' }]}>
+                          {item.tag}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.lockCardDesc, { color: colors.textMuted }]}>{item.desc}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Fine-Tuning Controls */}
+            <View style={[styles.fineTuneCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+              {/* Tab Switch Lock Toggle */}
+              <TouchableOpacity
+                style={styles.switchRow}
+                onPress={() => {
+                  setAutoLockOnBlur(!autoLockOnBlur);
+                  setSelectedLockPreset('CUSTOM');
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>
+                    Lock immediately on tab switch
+                  </Text>
+                  <Text style={[styles.switchSub, { color: colors.textMuted }]}>
+                    Hides numbers whenever browser tab loses focus
+                  </Text>
+                </View>
+                <Ionicons
+                  name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
+                  size={30}
+                  color={autoLockOnBlur ? colors.primary : colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              {/* Inactivity Duration Pills */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={[styles.switchLabel, { color: colors.textPrimary, marginBottom: 8 }]}>
+                  Inactivity Idle Duration
+                </Text>
+                <View style={styles.pillsRow}>
+                  {[1, 5, 15, 30, 0].map((mins) => {
+                    const isSel = inactivityMinutes === mins;
+                    return (
+                      <TouchableOpacity
+                        key={mins}
+                        style={[
+                          styles.pillBtn,
+                          {
+                            backgroundColor: isSel ? colors.primary : colors.surface,
+                            borderColor: isSel ? colors.primary : colors.borderSubtle,
+                          },
+                        ]}
+                        onPress={() => {
+                          setInactivityMinutes(mins);
+                          setSelectedLockPreset('CUSTOM');
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.pillBtnText,
+                            { color: isSel ? '#FFFFFF' : colors.textPrimary },
+                          ]}
+                        >
+                          {mins === 0 ? 'Never' : `${mins}m`}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-
-                {/* Interface Customization Swatches */}
-                <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 22 }]}>
-                  CUSTOMIZE INTERFACE
-                </Text>
-                <View style={[styles.swatchesCard, { borderColor: colors.borderSubtle, backgroundColor: colors.background }]}>
-                  {[
-                    { label: 'Primary accent', color: previewColors.primary },
-                    { label: 'Headers', color: previewColors.surface },
-                    { label: 'Buttons', color: previewColors.primary },
-                    { label: 'Panels / surfaces', color: previewColors.surface },
-                    { label: 'Text', color: previewColors.textPrimary },
-                    { label: 'Borders', color: previewColors.border },
-                  ].map((s) => (
-                    <View key={s.label} style={[styles.swatchRow, { borderBottomColor: colors.borderSubtle }]}>
-                      <Text style={[styles.swatchLabel, { color: colors.textSecondary }]}>{s.label}</Text>
-                      <View style={[styles.swatchBlock, { backgroundColor: s.color, borderColor: colors.border }]} />
-                    </View>
-                  ))}
-                </View>
-
-                {/* Live Preview Card */}
-                <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 20 }]}>PREVIEW</Text>
-                <View
-                  style={[
-                    styles.previewBox,
-                    {
-                      backgroundColor: previewColors.surface,
-                      borderColor: previewColors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.previewText, { color: previewColors.textPrimary }]}>
-                    Panel, header, and button
-                  </Text>
-                  <View style={[styles.previewActionBtn, { backgroundColor: previewColors.primary }]}>
-                    <Text style={styles.previewActionText}>Sample action</Text>
-                  </View>
-                </View>
-              </ScrollView>
-
-              {/* Bottom Actions */}
-              <View style={[styles.drawerFooter, { borderTopColor: colors.borderSubtle }]}>
-                <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave}>
-                  <Text style={styles.saveBtnText}>Save appearance ✓</Text>
-                </TouchableOpacity>
               </View>
             </View>
+
+            {/* Swatches preview */}
+            <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 24 }]}>
+              COLOR TOKENS PREVIEW
+            </Text>
+            <View style={[styles.swatchesCard, { borderColor: colors.borderSubtle, backgroundColor: colors.background }]}>
+              {[
+                { label: 'Primary accent', color: previewColors.primary },
+                { label: 'Panels & surface', color: previewColors.surface },
+                { label: 'Text color', color: previewColors.textPrimary },
+                { label: 'Border outline', color: previewColors.border },
+              ].map((s) => (
+                <View key={s.label} style={[styles.swatchRow, { borderBottomColor: colors.borderSubtle }]}>
+                  <Text style={[styles.swatchLabel, { color: colors.textSecondary }]}>{s.label}</Text>
+                  <View style={[styles.swatchBlock, { backgroundColor: s.color, borderColor: colors.border }]} />
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+
+          {/* Bottom Actions */}
+          <View style={[styles.drawerFooter, { borderTopColor: colors.borderSubtle }]}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave}>
+              <Text style={styles.saveBtnText}>Save Settings ✓</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -165,7 +326,7 @@ const styles = StyleSheet.create({
   },
   drawerSheet: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 500,
     height: '100%',
     shadowColor: '#000',
     shadowOffset: { width: -4, height: 0 },
@@ -224,6 +385,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginTop: 8,
   },
   presetCard: {
     flexDirection: 'row',
@@ -248,18 +410,84 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: 10,
+  },
+  sectionSub: {
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  lockOptionsGrid: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  lockCard: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  lockCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lockCardBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  lockCardBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  lockCardDesc: {
+    fontSize: 11,
+    marginTop: 4,
+    lineHeight: 15,
+  },
+  fineTuneCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switchLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  switchSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  pillBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   swatchesCard: {
     borderRadius: 12,
     borderWidth: 1,
-    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 8,
   },
   swatchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
   },
@@ -269,46 +497,23 @@ const styles = StyleSheet.create({
   },
   swatchBlock: {
     width: 24,
-    height: 16,
-    borderRadius: 4,
+    height: 24,
+    borderRadius: 6,
     borderWidth: 1,
-  },
-  previewBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  previewText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  previewActionBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  previewActionText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   drawerFooter: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    padding: 18,
     borderTopWidth: 1,
-    alignItems: 'flex-end',
   },
   saveBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 9,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
 });
