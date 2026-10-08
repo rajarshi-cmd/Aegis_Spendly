@@ -80,26 +80,59 @@ export function parseBalanceInput(val: string | number, fallback: number = 0): n
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export const MAX_FINANCIAL_AMOUNT = 999_999_999.99;
+export const MAX_DESCRIPTION_LENGTH = 255;
+
 /**
- * Validates a positive numeric transaction amount:
+ * Validates a positive numeric transaction amount with overflow protections (CWE-128):
  */
 export function validatePositiveAmount(val: string | number): ValidationResult<number> {
   const num = typeof val === 'number' ? val : parseBalanceInput(val, NaN);
   if (!Number.isFinite(num) || isNaN(num) || num <= 0) {
     return { isValid: false, value: 0, error: 'Please enter a positive numeric amount.' };
   }
+  if (num > MAX_FINANCIAL_AMOUNT) {
+    return {
+      isValid: false,
+      value: MAX_FINANCIAL_AMOUNT,
+      error: `Amount exceeds maximum allowable limit of ₹${MAX_FINANCIAL_AMOUNT.toLocaleString('en-IN')}.`,
+    };
+  }
   return { isValid: true, value: num };
 }
 
 /**
- * Validates a non-negative balance (0 or greater):
+ * Validates a non-negative balance (0 or greater) with overflow protections:
  */
 export function validateNonNegativeAmount(val: string | number): ValidationResult<number> {
   const num = typeof val === 'number' ? val : parseBalanceInput(val, NaN);
   if (!Number.isFinite(num) || isNaN(num) || num < 0) {
     return { isValid: false, value: 0, error: 'Amount cannot be negative.' };
   }
+  if (num > MAX_FINANCIAL_AMOUNT) {
+    return {
+      isValid: false,
+      value: MAX_FINANCIAL_AMOUNT,
+      error: `Amount exceeds maximum allowable limit of ₹${MAX_FINANCIAL_AMOUNT.toLocaleString('en-IN')}.`,
+    };
+  }
   return { isValid: true, value: num };
+}
+
+/**
+ * Sanitizes and validates transaction descriptions against control characters and buffer overflow:
+ */
+export function validateDescription(val: string | null | undefined): ValidationResult<string> {
+  if (val == null) return { isValid: true, value: '' };
+  const cleaned = String(val).trim().replace(/[\x00-\x1F\x7F]/g, '');
+  if (cleaned.length > MAX_DESCRIPTION_LENGTH) {
+    return {
+      isValid: false,
+      value: cleaned.slice(0, MAX_DESCRIPTION_LENGTH),
+      error: `Description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`,
+    };
+  }
+  return { isValid: true, value: cleaned };
 }
 
 /**

@@ -21,6 +21,8 @@ interface AuthSecurityContextType {
   authStatus: AuthStatus;
   user: AuthUser | null;
   config: AuthSecurityConfig;
+  failedPinAttempts: number;
+  lockoutRemainingSeconds: number;
   updateConfig: (partial: Partial<AuthSecurityConfig>) => void;
   signInWithGoogle: (customDetails?: Partial<AuthUser>) => Promise<void>;
   setupPin: (pin: string) => Promise<boolean>;
@@ -37,8 +39,34 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('UNAUTHENTICATED');
   const [config, setConfig] = useState<AuthSecurityConfig>(DEFAULT_AUTH_CONFIG);
+  const [failedPinAttempts, setFailedPinAttempts] = useState<number>(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutRemainingSeconds, setLockoutRemainingSeconds] = useState<number>(0);
 
   const idleTimerRef = useRef<any>(null);
+
+  // Timer countdown for active PIN lockout
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setLockoutRemainingSeconds(0);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = Math.ceil((lockoutUntil - now) / 1000);
+      if (diff <= 0) {
+        setLockoutUntil(null);
+        setLockoutRemainingSeconds(0);
+      } else {
+        setLockoutRemainingSeconds(diff);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
 
   // Initialize from storage on mount
   useEffect(() => {
@@ -207,8 +235,18 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const unlockWithPin = useCallback(
     async (pin: string): Promise<boolean> => {
       if (!user || !user.pinHash || !user.pinSalt) return false;
+
+      // Enforce active lockout
+      if (lockoutUntil && Date.now() < lockoutUntil) {
+        return false;
+      }
+
       const isValid = await verifyPin(pin, user.pinSalt, user.pinHash);
       if (isValid) {
+        // Reset attempts upon successful unlock
+        setFailedPinAttempts(0);
+        setLockoutUntil(null);
+        setLockoutRemainingSeconds(0);
         if (user.isOnboarded === false) {
           setAuthStatus('ONBOARDING');
         } else {
@@ -216,9 +254,26 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
         return true;
       }
+
+      // Track failed attempts and trigger lockouts (CWE-307 mitigation)
+      const nextFailed = failedPinAttempts + 1;
+      setFailedPinAttempts(nextFailed);
+
+      if (nextFailed >= 8) {
+        // 5 minute lockout after 8 failed attempts
+        const lockDuration = 300_000;
+        setLockoutUntil(Date.now() + lockDuration);
+        setLockoutRemainingSeconds(300);
+      } else if (nextFailed >= 5) {
+        // 30 second lockout after 5 failed attempts
+        const lockDuration = 30_000;
+        setLockoutUntil(Date.now() + lockDuration);
+        setLockoutRemainingSeconds(30);
+      }
+
       return false;
     },
-    [user]
+    [user, lockoutUntil, failedPinAttempts]
   );
 
   const verifyCurrentPin = useCallback(
@@ -250,6 +305,9 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const signOut = useCallback(() => {
     clearAuthSession();
     setUser(null);
+    setFailedPinAttempts(0);
+    setLockoutUntil(null);
+    setLockoutRemainingSeconds(0);
     setAuthStatus('UNAUTHENTICATED');
   }, []);
 
@@ -267,6 +325,8 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         authStatus,
         user,
         config,
+        failedPinAttempts,
+        lockoutRemainingSeconds,
         updateConfig,
         signInWithGoogle,
         setupPin,

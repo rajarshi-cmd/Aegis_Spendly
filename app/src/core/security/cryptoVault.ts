@@ -22,13 +22,68 @@ export function generateSalt(length = 16): string {
   return result;
 }
 
-/**
- * Computes a secure SHA-256 hash of a 4-digit PIN combined with a unique salt.
- * Uses Web Crypto API when available with a universal fallback.
- */
-export async function hashPin(pin: string, salt: string): Promise<string> {
-  const message = `${salt}:aegis_vault:${pin}:${salt}`;
+export const PBKDF2_ITERATIONS = 10000;
 
+/**
+ * Constant-time string equality comparison to prevent timing attacks (CWE-208).
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {
+    return false;
+  }
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+/**
+ * Computes a high-iteration PBKDF2 key derivation of a PIN combined with a unique salt (CWE-916 fix).
+ * Uses Web Crypto API when available with an iterative SHA-256 fallback.
+ */
+export async function hashPinPbkdf2(pin: string, salt: string, iterations = PBKDF2_ITERATIONS): Promise<string> {
+  const encoder = new TextEncoder();
+  if (typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.importKey && crypto.subtle.deriveBits) {
+    try {
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(pin),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+      );
+      const derivedBits = await crypto.subtle.deriveBits(
+        {
+          name: 'PBKDF2',
+          salt: encoder.encode(`aegis:${salt}`),
+          iterations,
+          hash: 'SHA-256',
+        },
+        keyMaterial,
+        256
+      );
+      const hashArray = Array.from(new Uint8Array(derivedBits));
+      return 'pbkdf2$' + iterations + '$' + hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fall through to iterative fallback
+    }
+  }
+
+  // Pure iterative fallback (1000 rounds of salted stretching)
+  const rounds = Math.min(iterations, 1000);
+  let current = `${salt}:aegis_vault:${pin}:${salt}`;
+  for (let i = 0; i < rounds; i++) {
+    current = fallbackSha256(`${current}:${salt}:${i}`);
+  }
+  return 'pbkdf2$' + rounds + '$' + current;
+}
+
+/**
+ * Legacy single-round SHA-256 hashing maintained for backward compatibility.
+ */
+export async function hashPinLegacy(pin: string, salt: string): Promise<string> {
+  const message = `${salt}:aegis_vault:${pin}:${salt}`;
   if (typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.digest) {
     try {
       const encoder = new TextEncoder();
@@ -36,22 +91,41 @@ export async function hashPin(pin: string, salt: string): Promise<string> {
       const hashBuffer = await crypto.subtle.digest('SHA-256', data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {
-      // Fall through to JS fallback
-    }
+    } catch {}
   }
-
-  // Pure TypeScript/JS SHA-256 fallback implementation for non-browser/node environments
   return fallbackSha256(message);
 }
 
 /**
- * Verifies a PIN against a known hash and salt in constant-like time.
+ * Default PIN hashing function using hardened PBKDF2 key stretching.
+ */
+export async function hashPin(pin: string, salt: string): Promise<string> {
+  return hashPinPbkdf2(pin, salt, PBKDF2_ITERATIONS);
+}
+
+/**
+ * Verifies a PIN against a known hash and salt using constant-time comparison.
+ * Supports both modern PBKDF2 hashes and legacy SHA-256 hashes seamlessly.
  */
 export async function verifyPin(pin: string, salt: string, expectedHash: string): Promise<boolean> {
   if (!pin || !salt || !expectedHash) return false;
-  const computed = await hashPin(pin, salt);
-  return computed === expectedHash;
+
+  if (expectedHash.startsWith('pbkdf2$')) {
+    const parts = expectedHash.split('$');
+    const iterations = parseInt(parts[1], 10) || PBKDF2_ITERATIONS;
+    const computed = await hashPinPbkdf2(pin, salt, iterations);
+    return constantTimeEqual(computed, expectedHash);
+  }
+
+  // Backward compatibility: verify legacy single-round SHA-256
+  const legacyComputed = await hashPinLegacy(pin, salt);
+  if (constantTimeEqual(legacyComputed, expectedHash)) {
+    return true;
+  }
+
+  // Also check standard PBKDF2 in case hash format was altered
+  const pbkdf2Computed = await hashPin(pin, salt);
+  return constantTimeEqual(pbkdf2Computed, expectedHash);
 }
 
 let memoryStorage: Record<string, string> = {};

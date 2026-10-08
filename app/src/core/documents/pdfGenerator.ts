@@ -11,6 +11,19 @@ export interface ReportData {
   accounts: Account[];
 }
 
+/**
+ * Sanitizes user-provided strings against HTML / Stored XSS injection (CWE-79).
+ */
+export function escapeHtml(unsafe: string | null | undefined): string {
+  if (unsafe == null) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export class DocumentGenerator {
   /**
    * Builds clean invoice-style HTML for vector-based PDF rendering.
@@ -30,7 +43,7 @@ export class DocumentGenerator {
       .map(
         (c) => `
         <tr>
-          <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-weight: 500;">${c.category}</td>
+          <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; font-weight: 500;">${escapeHtml(c.category)}</td>
           <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; text-align: right; font-family: monospace;">₹${c.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
           <td style="padding: 10px 14px; border-bottom: 1px solid #E2E8F0; text-align: right; font-weight: 600;">${c.percentage.toFixed(1)}%</td>
         </tr>
@@ -52,15 +65,20 @@ export class DocumentGenerator {
         const prefix = isPositive ? '+' : '-';
         const accountName = accountMap.get(tx.account_id) || 'Account';
 
+        const safeDesc = escapeHtml(tx.description || tx.category);
+        const safeAccountName = escapeHtml(accountName);
+        const safeRef = tx.reference_number ? `• Ref: ${escapeHtml(tx.reference_number)}` : '';
+        const safeCategory = escapeHtml(tx.category);
+
         return `
         <tr style="background-color: ${bg};">
           <td style="padding: 8px 12px; border-bottom: 1px solid #E2E8F0; font-size: 12px; color: #64748B;">${dateStr}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #E2E8F0; font-size: 13px; font-weight: 500;">
-            ${tx.description || tx.category}
-            <div style="font-size: 10px; color: #94A3B8;">${accountName} ${tx.reference_number ? `• Ref: ${tx.reference_number}` : ''}</div>
+            ${safeDesc}
+            <div style="font-size: 10px; color: #94A3B8;">${safeAccountName} ${safeRef}</div>
           </td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #E2E8F0; font-size: 12px;">
-            <span style="background-color: #E2E8F0; color: #334155; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">${tx.category}</span>
+            <span style="background-color: #E2E8F0; color: #334155; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">${safeCategory}</span>
           </td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #E2E8F0; text-align: right; font-size: 13px; font-family: monospace; font-weight: 600; color: ${amtColor};">
             ${prefix}₹${tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

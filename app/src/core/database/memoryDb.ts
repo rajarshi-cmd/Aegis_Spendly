@@ -397,10 +397,28 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
     }
     if (trimmed.includes('FROM TRANSACTIONS')) {
       let result = [...this.store.transactions];
-      if (trimmed.includes('WHERE ACCOUNT_ID = ?')) {
-        result = result.filter((t) => t.account_id === params[0]);
-      } else if (trimmed.includes('(ACCOUNT_ID = ? OR DESTINATION_ACCOUNT_ID = ?)')) {
+      if (trimmed.includes('(ACCOUNT_ID = ? OR DESTINATION_ACCOUNT_ID = ?)')) {
         result = result.filter((t) => t.account_id === params[0] || t.destination_account_id === params[0]);
+      } else if (trimmed.includes('WHERE ACCOUNT_ID = ?')) {
+        result = result.filter((t) => t.account_id === params[0]);
+      }
+      if (trimmed.includes('CATEGORY = ?')) {
+        const catParam = params.find((p) => typeof p === 'string' && !p.startsWith('%') && p !== 'OUTFLOW' && p !== 'INFLOW' && p !== 'TRANSFER');
+        if (catParam) {
+          result = result.filter((t) => t.category === catParam);
+        }
+      }
+      if (trimmed.includes('DESCRIPTION LIKE ?') || trimmed.includes('LIKE ?')) {
+        const likeParam = params.find((p) => typeof p === 'string' && p.startsWith('%') && p.endsWith('%'));
+        if (likeParam && typeof likeParam === 'string') {
+          const rawQuery = likeParam.slice(1, -1).toLowerCase();
+          result = result.filter(
+            (t) =>
+              (t.description && t.description.toLowerCase().includes(rawQuery)) ||
+              (t.category && t.category.toLowerCase().includes(rawQuery)) ||
+              (t.reference_number && t.reference_number.toLowerCase().includes(rawQuery))
+          );
+        }
       }
       return result as T[];
     }
