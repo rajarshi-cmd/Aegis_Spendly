@@ -6,3 +6,4 @@ export * from './upcoming';
 export * from './investments';
 export * from './sync';
 export * from './profile';
+export * from './auth';

@@ -25,6 +25,10 @@ import { SettingsDrawer } from './src/presentation/components/drawers/SettingsDr
 import { GoogleSyncModal } from './src/presentation/components/drawers/GoogleSyncModal';
 import { EditAccountModal } from './src/features/accounts/forms/EditAccountModal';
 import { Account } from './src/core/types/accounts';
+import { AuthSecurityProvider, useAuthSecurity } from './src/presentation/hooks/useAuthSecurity';
+import { AuthGateScreen } from './src/presentation/components/security/AuthGateScreen';
+import { PinSetupScreen } from './src/presentation/components/security/PinSetupScreen';
+import { LockScreen } from './src/presentation/components/security/LockScreen';
 
 const MainNavigator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTabKey>('OVERVIEW');
@@ -291,13 +295,33 @@ const MainNavigator: React.FC = () => {
   );
 };
 
+const SecurityGateNavigator: React.FC = () => {
+  const { authStatus } = useAuthSecurity();
+
+  if (authStatus === 'UNAUTHENTICATED') {
+    return <AuthGateScreen />;
+  }
+
+  if (authStatus === 'PIN_SETUP') {
+    return <PinSetupScreen />;
+  }
+
+  if (authStatus === 'LOCKED') {
+    return <LockScreen />;
+  }
+
+  return <MainNavigator />;
+};
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <FinanceDataProvider>
-          <MainNavigator />
-        </FinanceDataProvider>
+        <AuthSecurityProvider>
+          <FinanceDataProvider>
+            <SecurityGateNavigator />
+          </FinanceDataProvider>
+        </AuthSecurityProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

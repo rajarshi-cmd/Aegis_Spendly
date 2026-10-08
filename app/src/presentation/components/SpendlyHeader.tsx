@@ -5,6 +5,7 @@ import { useTheme } from '../theme';
 import { UserProfile } from '../../core/types/profile';
 import { ActiveTabKey } from './SpendlySidebar';
 import { useFinanceData } from '../hooks/useFinanceData';
+import { useAuthSecurity } from '../hooks/useAuthSecurity';
 import { formatRupee } from '../../core/utils/currency';
 import { isDateInMonth } from '../../core/utils/date';
 
@@ -42,6 +43,8 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
     triggerGoogleSheetsSync,
     setActiveMonth: setContextActiveMonth,
   } = useFinanceData();
+
+  const { lockSession } = useAuthSecurity();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
@@ -312,6 +315,15 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
           activeOpacity={0.7}
         >
           <Ionicons name="color-palette-outline" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Lock Vault Button */}
+        <TouchableOpacity
+          style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
+          onPress={lockSession}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
