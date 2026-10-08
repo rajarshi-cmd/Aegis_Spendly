@@ -8,7 +8,7 @@ export function safeFormatDate(
   locale: string = 'en-IN',
   options: Intl.DateTimeFormatOptions = { month: 'short', day: '2-digit', year: 'numeric' }
 ): string {
-  if (!dateInput) return '—';
+  if (dateInput === null || dateInput === undefined || dateInput === '') return '—';
   try {
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return '—';
@@ -29,7 +29,7 @@ export function safeFormatTime(
   locale: string = 'en-US',
   options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
 ): string {
-  if (!dateInput) return 'Just now';
+  if (dateInput === null || dateInput === undefined || dateInput === '') return 'Just now';
   try {
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return 'Just now';

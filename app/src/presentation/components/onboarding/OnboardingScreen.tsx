@@ -18,6 +18,13 @@ import { UserProfile, AvatarId } from '../../../core/types/profile';
 import { AutoLockPreset } from '../../../core/types/auth';
 import { SyncCadence, DayOfWeek } from '../../../core/types/sync';
 import { formatRupee } from '../../../core/utils/currency';
+import {
+  validateUsername as checkUsername,
+  validateCalendarDay,
+  clampCalendarDay,
+  validateKeepTrackRatio,
+  parseBalanceInput,
+} from '../../../core/utils/validators';
 
 type OnboardingStep =
   | 'IDENTITY'
@@ -78,6 +85,8 @@ export const OnboardingScreen: React.FC = () => {
   const [newCardDueDay, setNewCardDueDay] = useState('5');
   const [newCardKeepTrackRatio, setNewCardKeepTrackRatio] = useState<number>(50); // Default 50%
   const [newCardColor, setNewCardColor] = useState<'EMERALD' | 'PURPLE' | 'CARAMEL'>('EMERALD');
+  const [cardCutDayError, setCardCutDayError] = useState<string | null>(null);
+  const [cardDueDayError, setCardDueDayError] = useState<string | null>(null);
 
   // Step 4: Income Type (Salaried vs Other Payments)
   const [incomeType, setIncomeType] = useState<'SALARIED' | 'OTHER'>('SALARIED');
@@ -124,13 +133,9 @@ export const OnboardingScreen: React.FC = () => {
 
   // Validation for Step 1
   const validateUsername = (val: string): boolean => {
-    const cleaned = val.trim().toLowerCase().replace(/^@/, '');
-    if (cleaned.length < 3) {
-      setUsernameError('Username must be at least 3 characters.');
-      return false;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(cleaned)) {
-      setUsernameError('Letters, numbers and underscores only.');
+    const res = checkUsername(val);
+    if (!res.isValid) {
+      setUsernameError(res.error || 'Invalid username');
       return false;
     }
     setUsernameError(null);
@@ -144,8 +149,8 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleAddBank = () => {
     if (!newBankName.trim()) return;
-    const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-    const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+    const bal = parseBalanceInput(newBankBalance, 0);
+    const minBal = parseBalanceInput(newBankMinBalance, 0);
     setBanks((prev) => [
       ...prev,
       {
@@ -164,12 +169,37 @@ export const OnboardingScreen: React.FC = () => {
     setBanks((prev) => prev.filter((b) => b.id !== id));
   };
 
+  const validateCutDayInput = (val: string): boolean => {
+    const res = validateCalendarDay(val);
+    if (!res.isValid) {
+      setCardCutDayError(res.error || 'Day must be between 1 and 31');
+      return false;
+    }
+    setCardCutDayError(null);
+    return true;
+  };
+
+  const validateDueDayInput = (val: string): boolean => {
+    const res = validateCalendarDay(val);
+    if (!res.isValid) {
+      setCardDueDayError(res.error || 'Day must be between 1 and 31');
+      return false;
+    }
+    setCardDueDayError(null);
+    return true;
+  };
+
   const handleAddCard = () => {
     if (!newCardName.trim()) return;
-    const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-    const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-    const cut = parseInt(newCardCutDay, 10) || 15;
-    const due = parseInt(newCardDueDay, 10) || 5;
+    const isCutValid = validateCutDayInput(newCardCutDay);
+    const isDueValid = validateDueDayInput(newCardDueDay);
+    if (!isCutValid || !isDueValid) return;
+
+    const lim = parseBalanceInput(newCardLimit, 100000);
+    const bal = parseBalanceInput(newCardBalance, 0);
+    const cut = clampCalendarDay(newCardCutDay, 15);
+    const due = clampCalendarDay(newCardDueDay, 5);
+    const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
     setCards((prev) => [
       ...prev,
       {
@@ -179,14 +209,18 @@ export const OnboardingScreen: React.FC = () => {
         balance: bal,
         cutDay: cut,
         dueDay: due,
-        keepTrackRatio: newCardKeepTrackRatio,
+        keepTrackRatio: ratio,
         color: newCardColor,
       },
     ]);
     setNewCardName('');
     setNewCardLimit('');
     setNewCardBalance('0');
+    setNewCardCutDay('15');
+    setNewCardDueDay('5');
     setNewCardKeepTrackRatio(50);
+    setCardCutDayError(null);
+    setCardDueDayError(null);
   };
 
   const handleRemoveCard = (id: string) => {
@@ -219,8 +253,8 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleContinueFromBanks = () => {
     if (newBankName.trim()) {
-      const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-      const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+      const bal = parseBalanceInput(newBankBalance, 0);
+      const minBal = parseBalanceInput(newBankMinBalance, 0);
       setBanks((prev) => [
         ...prev,
         {
@@ -239,10 +273,15 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleContinueFromCards = () => {
     if (newCardName.trim()) {
-      const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-      const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-      const cut = parseInt(newCardCutDay, 10) || 15;
-      const due = parseInt(newCardDueDay, 10) || 5;
+      const isCutValid = validateCutDayInput(newCardCutDay);
+      const isDueValid = validateDueDayInput(newCardDueDay);
+      if (!isCutValid || !isDueValid) return;
+
+      const lim = parseBalanceInput(newCardLimit, 100000);
+      const bal = parseBalanceInput(newCardBalance, 0);
+      const cut = clampCalendarDay(newCardCutDay, 15);
+      const due = clampCalendarDay(newCardDueDay, 5);
+      const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
       setCards((prev) => [
         ...prev,
         {
@@ -252,14 +291,18 @@ export const OnboardingScreen: React.FC = () => {
           balance: bal,
           cutDay: cut,
           dueDay: due,
-          keepTrackRatio: newCardKeepTrackRatio,
+          keepTrackRatio: ratio,
           color: newCardColor,
         },
       ]);
       setNewCardName('');
       setNewCardLimit('');
       setNewCardBalance('0');
+      setNewCardCutDay('15');
+      setNewCardDueDay('5');
       setNewCardKeepTrackRatio(50);
+      setCardCutDayError(null);
+      setCardDueDayError(null);
     }
     setCurrentStep('SALARY');
   };
@@ -270,8 +313,8 @@ export const OnboardingScreen: React.FC = () => {
       // Auto-commit any trailing entered bank or card if user didn't hit + Add
       const allBanks = [...banks];
       if (newBankName.trim()) {
-        const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-        const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+        const bal = parseBalanceInput(newBankBalance, 0);
+        const minBal = parseBalanceInput(newBankMinBalance, 0);
         allBanks.push({
           id: 'b-' + Date.now(),
           name: newBankName.trim(),
@@ -282,10 +325,11 @@ export const OnboardingScreen: React.FC = () => {
 
       const allCards = [...cards];
       if (newCardName.trim()) {
-        const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-        const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-        const cut = parseInt(newCardCutDay, 10) || 15;
-        const due = parseInt(newCardDueDay, 10) || 5;
+        const lim = parseBalanceInput(newCardLimit, 100000);
+        const bal = parseBalanceInput(newCardBalance, 0);
+        const cut = clampCalendarDay(newCardCutDay, 15);
+        const due = clampCalendarDay(newCardDueDay, 5);
+        const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
         allCards.push({
           id: 'c-' + Date.now(),
           name: newCardName.trim(),
@@ -293,7 +337,7 @@ export const OnboardingScreen: React.FC = () => {
           balance: bal,
           cutDay: cut,
           dueDay: due,
-          keepTrackRatio: newCardKeepTrackRatio,
+          keepTrackRatio: ratio,
           color: newCardColor,
         });
       }
@@ -324,8 +368,8 @@ export const OnboardingScreen: React.FC = () => {
         handle: `@${cleanUsername}`,
         email: email.trim(),
         avatar,
-        salary_amount: incomeType === 'SALARIED' ? parseFloat(salaryAmount) || 0 : 0,
-        salary_day: incomeType === 'SALARIED' ? parseInt(salaryDay, 10) || 1 : 1,
+        salary_amount: incomeType === 'SALARIED' ? parseBalanceInput(salaryAmount, 0) : 0,
+        salary_day: incomeType === 'SALARIED' ? clampCalendarDay(salaryDay, 1) : 1,
         salary_account_id: selectedSalaryBank || (banks[0]?.name ?? ''),
         driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
         isOnboarded: true,
@@ -767,25 +811,45 @@ export const OnboardingScreen: React.FC = () => {
                     <View style={[styles.formField, { flex: 1 }]}>
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BILL STATEMENT CUT-OFF DAY (1 - 31)</Text>
                       <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        style={[
+                          styles.fieldInput,
+                          {
+                            borderColor: cardCutDayError ? '#DC2626' : colors.border,
+                            color: colors.textPrimary,
+                          },
+                        ]}
                         placeholder="e.g. 15 (15th of month)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardCutDay}
-                        onChangeText={setNewCardCutDay}
+                        onChangeText={(val) => {
+                          setNewCardCutDay(val);
+                          validateCutDayInput(val);
+                        }}
                       />
+                      {cardCutDayError && <Text style={styles.errorText}>{cardCutDayError}</Text>}
                     </View>
 
                     <View style={[styles.formField, { flex: 1 }]}>
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>PAYMENT DUE DATE (1 - 31)</Text>
                       <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        style={[
+                          styles.fieldInput,
+                          {
+                            borderColor: cardDueDayError ? '#DC2626' : colors.border,
+                            color: colors.textPrimary,
+                          },
+                        ]}
                         placeholder="e.g. 5 (5th of next month)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardDueDay}
-                        onChangeText={setNewCardDueDay}
+                        onChangeText={(val) => {
+                          setNewCardDueDay(val);
+                          validateDueDayInput(val);
+                        }}
                       />
+                      {cardDueDayError && <Text style={styles.errorText}>{cardDueDayError}</Text>}
                     </View>
                   </View>
 
@@ -809,11 +873,11 @@ export const OnboardingScreen: React.FC = () => {
                       <View style={{ marginVertical: 10 }}>
                         <input
                           type="range"
-                          min="10"
+                          min="0"
                           max="100"
                           step="5"
                           value={newCardKeepTrackRatio}
-                          onChange={(e: any) => setNewCardKeepTrackRatio(Number(e.target.value))}
+                          onChange={(e: any) => setNewCardKeepTrackRatio(validateKeepTrackRatio(e.target.value))}
                           style={{
                             width: '100%',
                             height: '8px',
@@ -828,7 +892,7 @@ export const OnboardingScreen: React.FC = () => {
 
                     {/* Quick Preset Buttons for Mobile or Quick Click */}
                     <View style={styles.quickRatioRow}>
-                      {[30, 40, 50, 60, 75].map((pct) => (
+                      {[0, 30, 50, 75, 100].map((pct) => (
                         <TouchableOpacity
                           key={pct}
                           style={[

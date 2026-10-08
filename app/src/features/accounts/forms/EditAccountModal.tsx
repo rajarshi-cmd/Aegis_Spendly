@@ -248,11 +248,11 @@ export const EditAccountModal: React.FC<EditAccountModalProps> = ({
                     {Platform.OS === 'web' && typeof document !== 'undefined' ? (
                       <input
                         type="range"
-                        min="10"
+                        min="0"
                         max="100"
                         step="5"
                         value={keepTrackRatio}
-                        onChange={(e: any) => setKeepTrackRatio(Number(e.target.value))}
+                        onChange={(e: any) => setKeepTrackRatio(Math.max(0, Math.min(100, Number(e.target.value))))}
                         style={{
                           width: '100%',
                           marginTop: '10px',

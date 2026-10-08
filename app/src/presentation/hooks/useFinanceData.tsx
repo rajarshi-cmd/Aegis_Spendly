@@ -86,6 +86,8 @@ const DEFAULT_BUDGETS: PlannedBudget[] = [
 
 export interface FinanceDataContextType {
   accounts: Account[];
+  bankAccounts: Account[];
+  creditCards: Account[];
   deletedAccounts: DeletedAccount[];
   transactions: Transaction[];
   deletedTransactions: Transaction[];
@@ -698,6 +700,8 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     <FinanceDataContext.Provider
       value={{
         accounts,
+        bankAccounts,
+        creditCards,
         deletedAccounts,
         transactions,
         deletedTransactions,

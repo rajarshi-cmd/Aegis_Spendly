@@ -44,6 +44,9 @@ export function formatRupee(
  * e.g. 148000 -> ₹1.48L
  */
 export function formatCompactRupee(amount: number): string {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+    return '₹0';
+  }
   const abs = Math.abs(amount);
   const sign = amount < 0 ? '-' : '';
   if (abs >= 10000000) {
