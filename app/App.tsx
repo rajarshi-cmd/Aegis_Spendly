@@ -40,6 +40,7 @@ const MainNavigator: React.FC = () => {
   const [planAheadTab, setPlanAheadTab] = useState<PlanAheadTab>('SUBSCRIPTION');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSecurityUnlockedForSettings, setIsSecurityUnlockedForSettings] = useState(false);
   const [isGoogleSyncOpen, setIsGoogleSyncOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
@@ -172,7 +173,10 @@ const MainNavigator: React.FC = () => {
               onSelectMonth={setActiveMonth}
               onOpenAddEntry={() => setIsAddEntryOpen(true)}
               onOpenProfile={() => setIsProfileOpen(true)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenSettings={(unlocked) => {
+                setIsSecurityUnlockedForSettings(!!unlocked);
+                setIsSettingsOpen(true);
+              }}
               onOpenSync={() => setIsGoogleSyncOpen(true)}
             />
 
@@ -189,7 +193,10 @@ const MainNavigator: React.FC = () => {
             onSelectMonth={setActiveMonth}
             onOpenAddEntry={() => setIsAddEntryOpen(true)}
             onOpenProfile={() => setIsProfileOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenSettings={(unlocked) => {
+              setIsSecurityUnlockedForSettings(!!unlocked);
+              setIsSettingsOpen(true);
+            }}
             onOpenSync={() => setIsGoogleSyncOpen(true)}
           />
 
@@ -265,7 +272,11 @@ const MainNavigator: React.FC = () => {
         }}
       />
 
-      <SettingsDrawer visible={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsDrawer
+        visible={isSettingsOpen}
+        initialSecurityUnlocked={isSecurityUnlockedForSettings}
+        onClose={() => setIsSettingsOpen(false)}
+      />
       <GoogleSyncModal visible={isGoogleSyncOpen} onClose={() => setIsGoogleSyncOpen(false)} />
 
       {editingAccount && (

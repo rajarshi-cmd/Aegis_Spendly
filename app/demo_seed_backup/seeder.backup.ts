@@ -1,4 +1,4 @@
-import { DatabaseExecutor } from './types';
+import { DatabaseExecutor } from '../src/core/database/types';
 import {
   getAllAccounts,
   createAccount,
@@ -8,27 +8,19 @@ import {
   createObligation,
   createInvestment,
   generateUUID,
-} from './queries';
-import { Transaction } from '../types/transactions';
-import { Debt, SettlementRecord } from '../types/debts';
+} from '../src/core/database/queries';
+import { Transaction } from '../src/core/types/transactions';
+import { Debt, SettlementRecord } from '../src/core/types/debts';
 
-export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    if (window.localStorage.getItem('aegis_vault_initialized') === 'true') {
-      return false;
-    }
-    const profile = window.localStorage.getItem('aegis_user_profile');
-    if (profile) {
-      try {
-        const parsed = JSON.parse(profile);
-        if (parsed.isOnboarded) return false;
-      } catch {}
-    }
-  }
-
+/**
+ * DEMO SEED BACKUP
+ * This file contains the complete backup of demo placeholder accounts,
+ * transactions, obligations, investments, and debts used for demo testing.
+ */
+export async function seedDemoDataset(db: DatabaseExecutor): Promise<boolean> {
   const existingAccounts = await getAllAccounts(db);
   if (existingAccounts.length > 0) {
-    return false; // Database already seeded or populated
+    return false;
   }
 
   await db.withTransaction(async () => {
@@ -64,7 +56,6 @@ export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
     });
 
     // 2. Credit Cards (HDFC Regalia, Axis Ace, ICICI Coral)
-    // HDFC Regalia: 8,420 of 52,000 (16.2% - Watch)
     const regaliaCard = await createAccount(db, {
       name: 'HDFC Regalia',
       type: 'CREDIT_CARD',
@@ -77,7 +68,6 @@ export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
       last4: '4812',
     });
 
-    // Axis Ace: 4,680 of 35,000 (13.4% - Healthy)
     const aceCard = await createAccount(db, {
       name: 'Axis Ace',
       type: 'CREDIT_CARD',
@@ -90,7 +80,6 @@ export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
       last4: '0624',
     });
 
-    // ICICI Coral: 24,500 of 75,000 (32.7% - Attention)
     const coralCard = await createAccount(db, {
       name: 'ICICI Coral',
       type: 'CREDIT_CARD',
@@ -264,7 +253,7 @@ export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
       notes: 'RBI SGB Series',
     });
 
-    // 6. Bilateral P2P Debt (Aegis core engine feature)
+    // 6. Bilateral P2P Debt
     const activeDebt: Debt = {
       id: generateUUID(),
       counterparty: 'Marcus Vance',

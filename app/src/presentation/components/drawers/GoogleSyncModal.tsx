@@ -16,6 +16,7 @@ import { useTheme } from '../../theme';
 import { useFinanceData } from '../../hooks/useFinanceData';
 import { SyncCadence, DayOfWeek } from '../../../core/types/sync';
 import { GoogleSheetsSyncEngine } from '../../../core/engines/googleSheetsEngine';
+import { PinVerificationModal } from '../modals/PinVerificationModal';
 
 interface GoogleSyncModalProps {
   visible: boolean;
@@ -61,6 +62,10 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
   const [weeklyTime, setWeeklyTime] = useState<string>(syncConfig.weeklyTime);
   const [driveFolderName, setDriveFolderName] = useState<string>(syncConfig.driveFolderName || 'Aegis Spendly');
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [showPinForDrive, setShowPinForDrive] = useState(false);
+  const [showPinForGoogleAccount, setShowPinForGoogleAccount] = useState(false);
+  const [showEditAccountModal, setShowEditAccountModal] = useState(false);
+  const [newGoogleEmail, setNewGoogleEmail] = useState(syncConfig.googleEmail || '');
 
   // Compute next scheduled sync
   const nextSyncDate = useMemo(() => {
@@ -87,19 +92,28 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
     return Array.from(set);
   }, [transactions]);
 
-  const handleSaveSchedule = () => {
+  const commitSaveSchedule = (overrideFolder?: string) => {
     updateSyncConfig({
       cadence,
       dailyTime,
       weeklyDay,
       weeklyTime,
-      driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
+      driveFolderName: (overrideFolder ?? driveFolderName).trim() || 'Aegis Spendly',
     });
     setSyncToast('Schedule and folder preferences updated ✓');
     setTimeout(() => {
       setSyncToast(null);
       onClose();
     }, 1200);
+  };
+
+  const handleSaveSchedule = () => {
+    const isDriveChanged = driveFolderName.trim() !== (syncConfig.driveFolderName || 'Aegis Spendly');
+    if (isDriveChanged) {
+      setShowPinForDrive(true);
+      return;
+    }
+    commitSaveSchedule();
   };
 
   const handleManualSyncNow = async () => {
@@ -121,46 +135,59 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.drawerSheet, { backgroundColor: colors.surface, maxWidth: isDesktop ? 620 : '100%' }]} pointerEvents="auto">
-          {/* Header */}
-          <View style={[styles.drawerHeader, { borderBottomColor: colors.borderSubtle }]}>
-            <View>
-              <Text style={[styles.microHeader, { color: colors.textMuted }]}>CLOUD BACKUP & TEMPLATES</Text>
-              <Text style={[styles.drawerTitle, { color: colors.textPrimary }]}>Google Sheets Sync</Text>
+    <>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <View style={styles.backdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+          <View style={[styles.drawerSheet, { backgroundColor: colors.surface, maxWidth: isDesktop ? 620 : '100%' }]} pointerEvents="auto">
+            {/* Header */}
+            <View style={[styles.drawerHeader, { borderBottomColor: colors.borderSubtle }]}>
+              <View>
+                <Text style={[styles.microHeader, { color: colors.textMuted }]}>CLOUD BACKUP & TEMPLATES</Text>
+                <Text style={[styles.drawerTitle, { color: colors.textPrimary }]}>Google Sheets Sync</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Toast feedback */}
-            {syncToast && (
-              <View style={[styles.toastBanner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 8 }} />
-                <Text style={styles.toastText}>{syncToast}</Text>
-              </View>
-            )}
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              {/* Toast feedback */}
+              {syncToast && (
+                <View style={[styles.toastBanner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                  <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 8 }} />
+                  <Text style={styles.toastText}>{syncToast}</Text>
+                </View>
+              )}
 
-            {/* Google Account & Linked Spreadsheet Card */}
-            <View style={[styles.card, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={[styles.googleIconBox, { backgroundColor: '#F0FDF4' }]}>
-                    <Ionicons name="logo-google" size={18} color="#15803D" />
+              {/* Google Account & Linked Spreadsheet Card */}
+              <View style={[styles.card, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.googleIconBox, { backgroundColor: '#F0FDF4' }]}>
+                      <Ionicons name="logo-google" size={18} color="#15803D" />
+                    </View>
+                    <View>
+                      <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Google Drive Connected</Text>
+                      <Text style={[styles.cardSub, { color: colors.textMuted }]}>{syncConfig.googleEmail || 'aarav.mehta@gmail.com'}</Text>
+                    </View>
                   </View>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Google Drive Connected</Text>
-                    <Text style={[styles.cardSub, { color: colors.textMuted }]}>{syncConfig.googleEmail || 'aarav.mehta@gmail.com'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7' }]}>
+                      <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>Active</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.switchAccountBtn, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+                      onPress={() => {
+                        setNewGoogleEmail(syncConfig.googleEmail || '');
+                        setShowPinForGoogleAccount(true);
+                      }}
+                    >
+                      <Ionicons name="logo-google" size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                      <Text style={[styles.switchAccountBtnText, { color: colors.primary }]}>Change</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7' }]}>
-                  <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>Active</Text>
-                </View>
-              </View>
 
               <View style={[styles.sheetLinkRow, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -434,6 +461,101 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
         </View>
       </View>
     </Modal>
+
+    {/* PIN Verification before saving Google Drive Folder update */}
+    <PinVerificationModal
+      visible={showPinForDrive}
+      title="Security Verification"
+      subtitle="Enter your 4-digit Master PIN to update the Google Drive backup folder path."
+      iconName="folder"
+      onSuccess={() => {
+        setShowPinForDrive(false);
+        commitSaveSchedule();
+      }}
+      onCancel={() => setShowPinForDrive(false)}
+    />
+
+    {/* PIN Verification before changing linked Google Account */}
+    <PinVerificationModal
+      visible={showPinForGoogleAccount}
+      title="Security Verification"
+      subtitle="Enter your 4-digit Master PIN to change the linked Google account."
+      iconName="logo-google"
+      onSuccess={() => {
+        setShowPinForGoogleAccount(false);
+        setShowEditAccountModal(true);
+      }}
+      onCancel={() => setShowPinForGoogleAccount(false)}
+    />
+
+    {/* Modal to update linked Google Account details */}
+    <Modal
+      visible={showEditAccountModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowEditAccountModal(false)}
+    >
+      <View style={styles.centerBackdrop}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => setShowEditAccountModal(false)}
+        />
+        <View style={[styles.editAccountCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]} pointerEvents="auto">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.googleIconBox, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="logo-google" size={18} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.editAccountTitle, { color: colors.textPrimary }]}>Linked Google Account</Text>
+                <Text style={[styles.editAccountSub, { color: colors.textMuted }]}>Update associated Drive identity</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowEditAccountModal(false)}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ marginBottom: 20 }}>
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Google Account Email</Text>
+            <TextInput
+              style={[styles.modalInput, { borderColor: colors.border, color: colors.textPrimary }]}
+              value={newGoogleEmail}
+              onChangeText={setNewGoogleEmail}
+              placeholder="example@gmail.com"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.cancelBtnOutline, { borderColor: colors.borderSubtle }]}
+              onPress={() => setShowEditAccountModal(false)}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.saveAccountBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                updateSyncConfig({
+                  googleEmail: newGoogleEmail.trim() || syncConfig.googleEmail,
+                });
+                setShowEditAccountModal(false);
+                setSyncToast('Linked Google account updated ✓');
+                setTimeout(() => setSyncToast(null), 2500);
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Save Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  </>
   );
 };
 
@@ -693,5 +815,72 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  switchAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  switchAccountBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  centerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  editAccountCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  editAccountTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  editAccountSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+  },
+  cancelBtnOutline: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveAccountBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

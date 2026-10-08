@@ -129,4 +129,64 @@ describe('Onboarding, Drive Storage & Auto-Lock Security Tests', () => {
       expect(loaded?.lockPreset).toBe('HIGH');
     });
   });
+
+  describe('Clean Vault Initialization & Demo Backup Isolation', () => {
+    it('should completely wipe placeholders when purgeSeedDataAndInitializeUserVault runs', async () => {
+      const { MemoryDatabaseAdapter } = await import('../src/core/database/memoryDb');
+      const { seedIfEmpty } = await import('../src/core/database/seeder');
+      const { purgeSeedDataAndInitializeUserVault, getAllAccounts, getAllTransactions } = await import(
+        '../src/core/database/queries'
+      );
+
+      const db = new MemoryDatabaseAdapter();
+      // First seed demo placeholder data
+      await seedIfEmpty(db);
+
+      const accountsBefore = await getAllAccounts(db);
+      const txsBefore = await getAllTransactions(db);
+      expect(accountsBefore.length).toBeGreaterThan(0);
+      expect(txsBefore.length).toBeGreaterThan(0);
+
+      // Now simulate user onboarding finishing with 1 bank and 1 card
+      await purgeSeedDataAndInitializeUserVault(
+        db,
+        [{ name: 'My Private Salary Account', balance: 50000, minimum_balance: 10000 }],
+        [
+          {
+            name: 'Primary Travel Card',
+            balance: 0,
+            limit: 200000,
+            cutDay: 15,
+            dueDay: 5,
+            color: 'EMERALD',
+            keepTrackRatio: 40,
+          },
+        ]
+      );
+
+      const accountsAfter = await getAllAccounts(db);
+      const txsAfter = await getAllTransactions(db);
+
+      expect(accountsAfter.length).toBe(2);
+      expect(accountsAfter.find((a) => a.name === 'My Private Salary Account')).toBeDefined();
+      expect(accountsAfter.find((a) => a.name === 'Primary Travel Card')).toBeDefined();
+      // Only the initial opening balance for the bank account should exist, zero placeholder txs
+      expect(txsAfter.length).toBe(1);
+      expect(txsAfter[0].description).toBe('Initial Account Balance');
+    });
+
+    it('should verify demo backup dataset is safely preserved in demo_seed_backup folder', async () => {
+      const { seedDemoDataset } = await import('../demo_seed_backup/seeder.backup');
+      const { MemoryDatabaseAdapter } = await import('../src/core/database/memoryDb');
+      const { getAllAccounts } = await import('../src/core/database/queries');
+
+      const testDb = new MemoryDatabaseAdapter();
+      const seeded = await seedDemoDataset(testDb);
+      expect(seeded).toBe(true);
+
+      const accounts = await getAllAccounts(testDb);
+      expect(accounts.length).toBe(6);
+    });
+  });
 });
+

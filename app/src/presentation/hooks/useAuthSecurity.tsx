@@ -25,6 +25,7 @@ interface AuthSecurityContextType {
   signInWithGoogle: (customDetails?: Partial<AuthUser>) => Promise<void>;
   setupPin: (pin: string) => Promise<boolean>;
   unlockWithPin: (pin: string) => Promise<boolean>;
+  verifyCurrentPin: (pin: string) => Promise<boolean>;
   completeOnboarding: (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => void;
   lockSession: () => void;
   signOut: () => void;
@@ -220,6 +221,14 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [user]
   );
 
+  const verifyCurrentPin = useCallback(
+    async (pin: string): Promise<boolean> => {
+      if (!user || !user.pinHash || !user.pinSalt) return false;
+      return await verifyPin(pin, user.pinSalt, user.pinHash);
+    },
+    [user]
+  );
+
   const completeOnboarding = useCallback(
     (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => {
       if (!user) return;
@@ -262,6 +271,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         signInWithGoogle,
         setupPin,
         unlockWithPin,
+        verifyCurrentPin,
         completeOnboarding,
         lockSession,
         signOut,

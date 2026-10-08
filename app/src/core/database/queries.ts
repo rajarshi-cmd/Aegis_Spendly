@@ -165,11 +165,19 @@ export async function purgeSeedDataAndInitializeUserVault(
     keepTrackRatio?: number;
   }>
 ): Promise<void> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('aegis_vault_initialized', 'true');
+    } catch {}
+  }
+
   await db.withTransaction(async () => {
-    // Delete all existing dummy placeholder transactions, debts, obligations and accounts
+    // Delete all existing placeholder transactions, debts, settlements, obligations, investments and accounts
     await db.run(`DELETE FROM transactions;`);
     await db.run(`DELETE FROM recurring_obligations;`);
     await db.run(`DELETE FROM debts;`);
+    await db.run(`DELETE FROM settlements;`);
+    await db.run(`DELETE FROM investments;`);
     await db.run(`DELETE FROM accounts;`);
 
     const now = new Date().toISOString();
@@ -186,12 +194,20 @@ export async function purgeSeedDataAndInitializeUserVault(
 
       // Record initial balance transaction if balance > 0
       if (b.balance > 0) {
-        const txId = generateUUID();
-        await db.run(
-          `INSERT INTO transactions (id, account_id, type, amount, category, description, timestamp, is_reconciled, source, sync_status)
-           VALUES (?, ?, 'INFLOW', ?, 'Opening Balance', 'Initial Account Balance', ?, 1, 'MANUAL', 'LOCAL_ONLY');`,
-          [txId, bankId, b.balance, now]
-        );
+        await createTransactionRow(db, {
+          id: generateUUID(),
+          account_id: bankId,
+          type: 'INFLOW',
+          amount: b.balance,
+          category: 'Opening Balance',
+          description: 'Initial Account Balance',
+          timestamp: now,
+          is_reconciled: true,
+          reference_number: null,
+          source: 'MANUAL',
+          sync_status: 'LOCAL_ONLY',
+          destination_account_id: null,
+        });
       }
     }
 
@@ -216,12 +232,20 @@ export async function purgeSeedDataAndInitializeUserVault(
 
       // Record initial card spend transaction if balance > 0
       if (c.balance > 0) {
-        const txId = generateUUID();
-        await db.run(
-          `INSERT INTO transactions (id, account_id, type, amount, category, description, timestamp, is_reconciled, source, sync_status)
-           VALUES (?, ?, 'OUTFLOW', ?, 'Opening Balance', 'Opening Card Balance', ?, 1, 'MANUAL', 'LOCAL_ONLY');`,
-          [txId, cardId, c.balance, now]
-        );
+        await createTransactionRow(db, {
+          id: generateUUID(),
+          account_id: cardId,
+          type: 'OUTFLOW',
+          amount: c.balance,
+          category: 'Opening Balance',
+          description: 'Opening Card Balance',
+          timestamp: now,
+          is_reconciled: true,
+          reference_number: null,
+          source: 'MANUAL',
+          sync_status: 'LOCAL_ONLY',
+          destination_account_id: null,
+        });
       }
     }
   });

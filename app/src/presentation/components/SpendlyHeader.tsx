@@ -8,6 +8,7 @@ import { useFinanceData } from '../hooks/useFinanceData';
 import { useAuthSecurity } from '../hooks/useAuthSecurity';
 import { formatRupee } from '../../core/utils/currency';
 import { isDateInMonth } from '../../core/utils/date';
+import { PinVerificationModal } from './modals/PinVerificationModal';
 
 interface SpendlyHeaderProps {
   activeTab: ActiveTabKey;
@@ -16,7 +17,7 @@ interface SpendlyHeaderProps {
   onSelectMonth?: (month: string) => void;
   onOpenAddEntry: () => void;
   onOpenProfile: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (securityUnlocked?: boolean) => void;
   onOpenSync?: () => void;
 }
 
@@ -48,6 +49,8 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showLockMenu, setShowLockMenu] = useState(false);
+  const [showPinForLockSettings, setShowPinForLockSettings] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   const handleManualSync = async () => {
@@ -327,7 +330,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
         {/* Settings button */}
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
-          onPress={onOpenSettings}
+          onPress={() => onOpenSettings(false)}
           activeOpacity={0.7}
         >
           <Ionicons name="color-palette-outline" size={16} color={colors.textSecondary} />
@@ -336,7 +339,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
         {/* Lock Vault Button */}
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
-          onPress={lockSession}
+          onPress={() => setShowLockMenu(true)}
           activeOpacity={0.7}
         >
           <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
@@ -593,6 +596,87 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Lock Action Modal */}
+      <Modal
+        visible={showLockMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLockMenu(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowLockMenu(false)}
+          />
+          <View style={[styles.lockMenuCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]} pointerEvents="auto">
+            <View style={styles.lockMenuHeader}>
+              <View style={[styles.lockMenuIconWrap, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.lockMenuTitle, { color: colors.textPrimary }]}>Vault Security</Text>
+                <Text style={[styles.lockMenuSub, { color: colors.textMuted }]}>Choose an action for your private ledger</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowLockMenu(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.lockMenuOptions}>
+              {/* Option 1: Lock Vault Now */}
+              <TouchableOpacity
+                style={[styles.lockMenuOption, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
+                onPress={() => {
+                  setShowLockMenu(false);
+                  lockSession();
+                }}
+              >
+                <View style={[styles.optionIconBox, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="lock-closed" size={20} color="#D97706" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Lock Vault Now</Text>
+                  <Text style={[styles.optionDesc, { color: colors.textMuted }]}>Immediately locks screen; requires Master PIN to open</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Option 2: Change Lock Settings */}
+              <TouchableOpacity
+                style={[styles.lockMenuOption, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
+                onPress={() => {
+                  setShowLockMenu(false);
+                  setShowPinForLockSettings(true);
+                }}
+              >
+                <View style={[styles.optionIconBox, { backgroundColor: colors.primaryLight }]}>
+                  <Ionicons name="options-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Change Lock Settings</Text>
+                  <Text style={[styles.optionDesc, { color: colors.textMuted }]}>Configure auto-lock duration, tab switch lock & presets</Text>
+                </View>
+                <Ionicons name="key-outline" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* PIN Verification before opening lock settings */}
+      <PinVerificationModal
+        visible={showPinForLockSettings}
+        title="Security Verification"
+        subtitle="Enter your 4-digit Master PIN to modify Vault Lock Settings."
+        iconName="lock-closed"
+        onSuccess={() => {
+          setShowPinForLockSettings(false);
+          onOpenSettings(true);
+        }}
+        onCancel={() => setShowPinForLockSettings(false)}
+      />
 
       {/* Floating Sync Toast Notification */}
       {syncToast && (
@@ -920,6 +1004,71 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   monthOptionSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  lockMenuCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  lockMenuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  lockMenuIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockMenuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  lockMenuSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  lockMenuOptions: {
+    gap: 10,
+  },
+  lockMenuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  optionIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  optionDesc: {
     fontSize: 11,
     marginTop: 2,
   },

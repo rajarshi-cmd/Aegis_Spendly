@@ -13,6 +13,7 @@ import { useTheme } from '../../theme';
 import { UserProfile, AvatarId } from '../../../core/types/profile';
 import { Account } from '../../../core/types/accounts';
 import { formatRupee } from '../../../core/utils/currency';
+import { PinVerificationModal } from '../modals/PinVerificationModal';
 
 interface ProfileDrawerProps {
   visible: boolean;
@@ -45,6 +46,11 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   const [salaryDay, setSalaryDay] = useState(profile.salary_day.toString().padStart(2, '0'));
   const [salaryAcc, setSalaryAcc] = useState(profile.salary_account_id);
   const [salarySavedToast, setSalarySavedToast] = useState(false);
+  const [showPinForDriveFolder, setShowPinForDriveFolder] = useState(false);
+  const [showPinForGoogleAccount, setShowPinForGoogleAccount] = useState(false);
+  const [showEditAccountModal, setShowEditAccountModal] = useState(false);
+  const [newGoogleEmail, setNewGoogleEmail] = useState(profile.email || '');
+  const [newGoogleName, setNewGoogleName] = useState(profile.name || '');
 
   const bankAccounts = accounts.filter((a) => a.type === 'BANK_DEPOSIT');
   const creditCards = accounts.filter((a) => a.type === 'CREDIT_CARD');
@@ -69,20 +75,30 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     setTimeout(() => setSalarySavedToast(false), 2000);
   };
 
-  const handleDone = () => {
+  const commitProfileChanges = (overrideDriveFolder?: string) => {
     const cleanUser = username.trim().toLowerCase().replace(/^@/, '');
     onUpdateProfile({
       name: name.trim() || profile.name,
       username: cleanUser || profile.username,
       handle: `@${cleanUser || profile.username}`,
-      driveFolderName: driveFolder.trim() || 'Aegis Spendly',
+      driveFolderName: (overrideDriveFolder ?? driveFolder).trim() || 'Aegis Spendly',
       avatar: selectedAvatar,
     });
     onClose();
   };
 
+  const handleDone = () => {
+    const isDriveChanged = driveFolder.trim() !== (profile.driveFolderName || 'Aegis Spendly');
+    if (isDriveChanged) {
+      setShowPinForDriveFolder(true);
+      return;
+    }
+    commitProfileChanges();
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
@@ -121,10 +137,21 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                       color={colors.primary}
                     />
                   </View>
-                  <View style={{ marginLeft: 14 }}>
+                  <View style={{ marginLeft: 14, flex: 1 }}>
                     <Text style={[styles.bannerName, { color: colors.textPrimary }]}>{profile.name}</Text>
                     <Text style={[styles.bannerEmail, { color: colors.textMuted }]}>{profile.email}</Text>
                   </View>
+                  <TouchableOpacity
+                    style={[styles.switchAccountBtn, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+                    onPress={() => {
+                      setNewGoogleEmail(profile.email || '');
+                      setNewGoogleName(profile.name || '');
+                      setShowPinForGoogleAccount(true);
+                    }}
+                  >
+                    <Ionicons name="logo-google" size={13} color={colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.switchAccountBtnText, { color: colors.primary }]}>Change</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Personal Details */}
@@ -342,6 +369,112 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             </View>
           </View>
         </Modal>
+
+      {/* PIN Verification before saving Google Drive Folder update */}
+      <PinVerificationModal
+        visible={showPinForDriveFolder}
+        title="Security Verification"
+        subtitle="Enter your 4-digit Master PIN to update the Google Drive backup folder path."
+        iconName="folder"
+        onSuccess={() => {
+          setShowPinForDriveFolder(false);
+          commitProfileChanges();
+        }}
+        onCancel={() => setShowPinForDriveFolder(false)}
+      />
+
+      {/* PIN Verification before changing linked Google Account */}
+      <PinVerificationModal
+        visible={showPinForGoogleAccount}
+        title="Security Verification"
+        subtitle="Enter your 4-digit Master PIN to change your linked Google account."
+        iconName="logo-google"
+        onSuccess={() => {
+          setShowPinForGoogleAccount(false);
+          setShowEditAccountModal(true);
+        }}
+        onCancel={() => setShowPinForGoogleAccount(false)}
+      />
+
+      {/* Modal to update linked Google Account details */}
+      <Modal
+        visible={showEditAccountModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditAccountModal(false)}
+      >
+        <View style={styles.centerBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowEditAccountModal(false)}
+          />
+          <View style={[styles.editAccountCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]} pointerEvents="auto">
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.googleIconBox, { backgroundColor: colors.primaryLight }]}>
+                  <Ionicons name="logo-google" size={18} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.editAccountTitle, { color: colors.textPrimary }]}>Linked Google Account</Text>
+                  <Text style={[styles.editAccountSub, { color: colors.textMuted }]}>Update associated Drive identity</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowEditAccountModal(false)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Account Full Name</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.textPrimary }]}
+                value={newGoogleName}
+                onChangeText={setNewGoogleName}
+                placeholder="Rajarshi Giri"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={{ marginBottom: 20 }}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Google Account Email</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.textPrimary }]}
+                value={newGoogleEmail}
+                onChangeText={setNewGoogleEmail}
+                placeholder="example@gmail.com"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.cancelBtnOutline, { borderColor: colors.borderSubtle }]}
+                onPress={() => setShowEditAccountModal(false)}
+              >
+                <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveAccountBtn, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  onUpdateProfile({
+                    name: newGoogleName.trim() || profile.name,
+                    email: newGoogleEmail.trim() || profile.email,
+                  });
+                  setName(newGoogleName.trim() || profile.name);
+                  setShowEditAccountModal(false);
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Save Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 };
 
@@ -556,5 +689,67 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  switchAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  switchAccountBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  centerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  editAccountCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  googleIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editAccountTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  editAccountSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  cancelBtnOutline: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveAccountBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

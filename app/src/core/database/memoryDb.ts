@@ -21,6 +21,37 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
     schema_migrations: [],
   };
 
+  private enablePersistence: boolean = false;
+
+  constructor(enablePersistence: boolean = (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined' && typeof (process as any)?.env?.JEST_WORKER_ID === 'undefined')) {
+    this.enablePersistence = enablePersistence;
+    if (this.enablePersistence && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('aegis_memory_db_store');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          this.store = {
+            accounts: parsed.accounts || [],
+            transactions: parsed.transactions || [],
+            debts: parsed.debts || [],
+            settlements: parsed.settlements || [],
+            recurring_obligations: parsed.recurring_obligations || [],
+            investments: parsed.investments || [],
+            schema_migrations: parsed.schema_migrations || [],
+          };
+        }
+      } catch {}
+    }
+  }
+
+  public persist() {
+    if (this.enablePersistence && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('aegis_memory_db_store', JSON.stringify(this.store));
+      } catch {}
+    }
+  }
+
   async exec(sql: string): Promise<void> {
     return;
   }
@@ -257,54 +288,81 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
     }
 
     if (trimmed.startsWith('DELETE FROM ACCOUNTS')) {
-      const [id] = params;
-      this.store.accounts = this.store.accounts.filter((a) => a.id !== id);
-      this.store.transactions = this.store.transactions.filter((t) => t.account_id !== id && t.destination_account_id !== id);
-      this.store.debts = this.store.debts.filter((d) => d.settlement_account_id !== id);
-      this.store.settlements = this.store.settlements.filter((s) => s.settlement_account_id !== id);
-      this.store.recurring_obligations = this.store.recurring_obligations.filter((o) => o.linked_account_id !== id);
-      this.store.investments.forEach((i) => {
-        if (i.linked_account_id === id) i.linked_account_id = null;
-      });
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.accounts = [];
+      } else {
+        const [id] = params;
+        this.store.accounts = this.store.accounts.filter((a) => a.id !== id);
+        this.store.transactions = this.store.transactions.filter((t) => t.account_id !== id && t.destination_account_id !== id);
+        this.store.debts = this.store.debts.filter((d) => d.settlement_account_id !== id);
+        this.store.settlements = this.store.settlements.filter((s) => s.settlement_account_id !== id);
+        this.store.recurring_obligations = this.store.recurring_obligations.filter((o) => o.linked_account_id !== id);
+        this.store.investments.forEach((i) => {
+          if (i.linked_account_id === id) i.linked_account_id = null;
+        });
+      }
+      this.persist();
       return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('DELETE FROM TRANSACTIONS')) {
-      const [id] = params;
-      this.store.transactions = this.store.transactions.filter((t) => t.id !== id);
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.transactions = [];
+      } else {
+        const [id] = params;
+        this.store.transactions = this.store.transactions.filter((t) => t.id !== id);
+      }
+      this.persist();
       return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('DELETE FROM RECURRING_OBLIGATIONS')) {
-      const [id] = params;
-      this.store.recurring_obligations = this.store.recurring_obligations.filter((o) => o.id !== id);
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.recurring_obligations = [];
+      } else {
+        const [id] = params;
+        this.store.recurring_obligations = this.store.recurring_obligations.filter((o) => o.id !== id);
+      }
+      this.persist();
       return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('DELETE FROM INVESTMENTS')) {
-      const [id] = params;
-      this.store.investments = this.store.investments.filter((i) => i.id !== id);
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.investments = [];
+      } else {
+        const [id] = params;
+        this.store.investments = this.store.investments.filter((i) => i.id !== id);
+      }
+      this.persist();
       return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('DELETE FROM DEBTS')) {
-      const [id] = params;
-      this.store.debts = this.store.debts.filter((d) => d.id !== id);
-      this.store.settlements = this.store.settlements.filter((s) => s.debt_id !== id);
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.debts = [];
+        this.store.settlements = [];
+      } else {
+        const [id] = params;
+        this.store.debts = this.store.debts.filter((d) => d.id !== id);
+        this.store.settlements = this.store.settlements.filter((s) => s.debt_id !== id);
+      }
+      this.persist();
       return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('DELETE FROM SETTLEMENTS')) {
-      if (trimmed.includes('WHERE DEBT_ID = ?')) {
+      if (params.length === 0 || !trimmed.includes('WHERE')) {
+        this.store.settlements = [];
+      } else if (trimmed.includes('WHERE DEBT_ID = ?')) {
         const [debtId] = params;
         this.store.settlements = this.store.settlements.filter((s) => s.debt_id !== debtId);
-        return { changes: 1, lastInsertRowId: 0 };
-      }
-      if (trimmed.includes('WHERE ID = ?')) {
+      } else if (trimmed.includes('WHERE ID = ?')) {
         const [id] = params;
         this.store.settlements = this.store.settlements.filter((s) => s.id !== id);
-        return { changes: 1, lastInsertRowId: 0 };
       }
+      this.persist();
+      return { changes: 1, lastInsertRowId: 0 };
     }
 
     if (trimmed.startsWith('UPDATE DEBTS SET OUTSTANDING_BALANCE = ?')) {
@@ -387,9 +445,12 @@ export class MemoryDatabaseAdapter implements DatabaseExecutor {
       schema_migrations: [...this.store.schema_migrations],
     };
     try {
-      return await action();
+      const result = await action();
+      this.persist();
+      return result;
     } catch (err) {
       this.store = backup;
+      this.persist();
       throw err;
     }
   }

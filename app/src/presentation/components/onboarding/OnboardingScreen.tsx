@@ -221,24 +221,22 @@ export const OnboardingScreen: React.FC = () => {
     setIsFinishing(true);
     try {
       // 1. Initialize user database vault with EXACT user banks & cards (purges all dummy seed accounts & placeholder txs)
-      if (banks.length > 0 || cards.length > 0) {
-        await initializeUserVault(
-          banks.map((b) => ({
-            name: b.name,
-            balance: b.balance,
-            minimum_balance: b.minBalance,
-          })),
-          cards.map((c) => ({
-            name: c.name,
-            limit: c.limit,
-            balance: c.balance,
-            cutDay: c.cutDay,
-            dueDay: c.dueDay,
-            color: c.color,
-            keepTrackRatio: c.keepTrackRatio,
-          }))
-        );
-      }
+      await initializeUserVault(
+        banks.map((b) => ({
+          name: b.name,
+          balance: b.balance,
+          minimum_balance: b.minBalance,
+        })),
+        cards.map((c) => ({
+          name: c.name,
+          limit: c.limit,
+          balance: c.balance,
+          cutDay: c.cutDay,
+          dueDay: c.dueDay,
+          color: c.color,
+          keepTrackRatio: c.keepTrackRatio,
+        }))
+      );
 
       // 2. Update User Profile
       const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');

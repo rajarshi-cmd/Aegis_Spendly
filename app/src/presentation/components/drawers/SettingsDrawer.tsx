@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemePresetName, THEME_PRESETS } from '../../theme';
 import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 import { AutoLockPreset } from '../../../core/types/auth';
+import { PinVerificationModal } from '../modals/PinVerificationModal';
 
 interface SettingsDrawerProps {
   visible: boolean;
   onClose: () => void;
+  initialSecurityUnlocked?: boolean;
 }
 
-export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose }) => {
+export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
+  visible,
+  onClose,
+  initialSecurityUnlocked = false,
+}) => {
   const { themeName, colors, setThemeName } = useTheme();
   const { config: securityConfig, updateConfig: updateSecurityConfig } = useAuthSecurity();
 
@@ -27,6 +33,28 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
   const [selectedLockPreset, setSelectedLockPreset] = useState<AutoLockPreset>(
     securityConfig.lockPreset || 'BALANCED'
   );
+  const [securityUnlocked, setSecurityUnlocked] = useState(initialSecurityUnlocked);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setSecurityUnlocked(initialSecurityUnlocked);
+      setActivePreset(themeName);
+      setAutoLockOnBlur(securityConfig.autoLockOnBlur);
+      setInactivityMinutes(securityConfig.inactivityTimeoutMinutes);
+      setSelectedLockPreset(securityConfig.lockPreset || 'BALANCED');
+    }
+  }, [visible, initialSecurityUnlocked, themeName, securityConfig]);
+
+  const requireSecurityUnlock = (action: () => void) => {
+    if (securityUnlocked) {
+      action();
+    } else {
+      setPendingAction(() => action);
+      setShowPinModal(true);
+    }
+  };
 
   const presets: { id: ThemePresetName; label: string; dotColor: string }[] = [
     { id: 'Soft Mint', label: 'Soft Mint', dotColor: '#0F4C3A' },
@@ -36,43 +64,48 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
   ];
 
   const handleSelectLockPreset = (preset: AutoLockPreset) => {
-    setSelectedLockPreset(preset);
-    switch (preset) {
-      case 'HIGH':
-        setAutoLockOnBlur(true);
-        setInactivityMinutes(1);
-        break;
-      case 'BALANCED':
-        setAutoLockOnBlur(true);
-        setInactivityMinutes(5);
-        break;
-      case 'RELAXED':
-        setAutoLockOnBlur(false);
-        setInactivityMinutes(15);
-        break;
-      case 'EXTENDED':
-        setAutoLockOnBlur(false);
-        setInactivityMinutes(30);
-        break;
-      case 'CUSTOM':
-        break;
-    }
+    requireSecurityUnlock(() => {
+      setSelectedLockPreset(preset);
+      switch (preset) {
+        case 'HIGH':
+          setAutoLockOnBlur(true);
+          setInactivityMinutes(1);
+          break;
+        case 'BALANCED':
+          setAutoLockOnBlur(true);
+          setInactivityMinutes(5);
+          break;
+        case 'RELAXED':
+          setAutoLockOnBlur(false);
+          setInactivityMinutes(15);
+          break;
+        case 'EXTENDED':
+          setAutoLockOnBlur(false);
+          setInactivityMinutes(30);
+          break;
+        case 'CUSTOM':
+          break;
+      }
+    });
   };
 
   const handleSave = () => {
     setThemeName(activePreset);
-    updateSecurityConfig({
-      autoLockOnBlur,
-      inactivityTimeoutMinutes: inactivityMinutes,
-      lockPreset: selectedLockPreset,
-    });
+    if (securityUnlocked) {
+      updateSecurityConfig({
+        autoLockOnBlur,
+        inactivityTimeoutMinutes: inactivityMinutes,
+        lockPreset: selectedLockPreset,
+      });
+    }
     onClose();
   };
 
   const previewColors = THEME_PRESETS[activePreset];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <View style={[styles.drawerSheet, { backgroundColor: colors.surface }]} pointerEvents="auto">
@@ -139,9 +172,35 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
             </View>
 
             {/* 2. VAULT AUTO-LOCK & SECURITY SECTION */}
-            <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 28 }]}>
-              VAULT AUTO-LOCK & SECURITY
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 28, marginBottom: 4 }}>
+              <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 0 }]}>
+                VAULT AUTO-LOCK & SECURITY
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.lockBadge,
+                  {
+                    backgroundColor: securityUnlocked ? colors.primaryLight : '#FEF3C7',
+                    borderColor: securityUnlocked ? colors.primary : '#F59E0B',
+                  },
+                ]}
+                onPress={() => {
+                  if (!securityUnlocked) {
+                    setShowPinModal(true);
+                  }
+                }}
+              >
+                <Ionicons
+                  name={securityUnlocked ? 'lock-open-outline' : 'lock-closed'}
+                  size={11}
+                  color={securityUnlocked ? colors.primary : '#B45309'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.lockBadgeText, { color: securityUnlocked ? colors.primary : '#92400E' }]}>
+                  {securityUnlocked ? 'Unlocked' : 'PIN Required'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
               Choose how often your private ledger locks with your Master PIN.
             </Text>
@@ -229,8 +288,10 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
               <TouchableOpacity
                 style={styles.switchRow}
                 onPress={() => {
-                  setAutoLockOnBlur(!autoLockOnBlur);
-                  setSelectedLockPreset('CUSTOM');
+                  requireSecurityUnlock(() => {
+                    setAutoLockOnBlur(!autoLockOnBlur);
+                    setSelectedLockPreset('CUSTOM');
+                  });
                 }}
               >
                 <View style={{ flex: 1, marginRight: 12 }}>
@@ -267,8 +328,10 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
                           },
                         ]}
                         onPress={() => {
-                          setInactivityMinutes(mins);
-                          setSelectedLockPreset('CUSTOM');
+                          requireSecurityUnlock(() => {
+                            setInactivityMinutes(mins);
+                            setSelectedLockPreset('CUSTOM');
+                          });
                         }}
                       >
                         <Text
@@ -314,6 +377,27 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ visible, onClose
         </View>
       </View>
     </Modal>
+
+    {/* PIN Verification Modal */}
+    <PinVerificationModal
+      visible={showPinModal}
+      title="Security Verification"
+      subtitle="Enter your 4-digit Master PIN to modify Vault Lock Settings."
+      iconName="lock-closed"
+      onSuccess={() => {
+        setShowPinModal(false);
+        setSecurityUnlocked(true);
+        if (pendingAction) {
+          pendingAction();
+          setPendingAction(null);
+        }
+      }}
+      onCancel={() => {
+        setShowPinModal(false);
+        setPendingAction(null);
+      }}
+    />
+    </>
   );
 };
 
@@ -515,5 +599,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  lockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  lockBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
