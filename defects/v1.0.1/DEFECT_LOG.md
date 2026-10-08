@@ -13,6 +13,7 @@
 | **[DEF-001](#def-001-lock-immediately-toggle-thumb-remains-slid-to-the-right-in-off-state)** | Visual / UI State | Medium | Onboarding & Settings Drawer | "Lock immediately" toggle switch knob stays on the right even when OFF | 🟡 Logged (Open) |
 | **[DEF-002](#def-002-add-entry-button-touches-screen-edge-on-tablet-rotation)** | Layout / Responsive | Medium | Navigation / Header / Action Buttons | "Add entry" button touches screen edge on rotation; does not autofit across phone & tablet sizes | 🟡 Logged (Open) |
 | **[DEF-003](#def-003-income-page-must-enforce-selecting-salary-credited-bank-to-proceed)** | Form Validation / Business Logic | Medium | Onboarding (Step 4 — Income) | Missing validation: user must be required to select at least one bank for salary credit before proceeding | 🟡 Logged (Open) |
+| **[DEF-004](#def-004-session-and-data-reset-on-complete-app-close-sent-back-to-onboarding)** | Data Persistence / Auth Architecture | 🔴 Critical (High) | Auth Lifecycle, CryptoVault & Local Storage | Closing app completely deletes session/profile, resetting user back to onboarding instead of preserving login and prompting for PIN | 🟡 Logged (Open) |
 
 ---
 
@@ -131,3 +132,50 @@ During onboarding on **Step 4: Income & Earnings Type**, when a user chooses the
 - In `OnboardingScreen.tsx` (line 1179), the "Continue" button calls `setCurrentStep('DRIVE')` directly without checking `selectedSalaryBank`.
 - When finishing onboarding (line 373), `salary_account_id` defaults to `selectedSalaryBank || (banks[0]?.name ?? '')`.
 - Recommended fix when fix phase starts: Add validation requiring `selectedSalaryBank` when `incomeType === 'SALARIED'` (and ensure at least one bank exists, or guide user to add one), disabling the continue button or displaying an inline error message until a bank is selected.
+
+---
+
+### DEF-004: Session and data reset on complete app close (sent back to onboarding)
+
+- **Defect ID:** `DEF-004`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1)
+- **Component / Screen:**
+  - `app/src/core/security/cryptoVault.ts` (`saveAuthSession`, `loadAuthSession`)
+  - `app/src/presentation/hooks/useAuthSecurity.tsx` (`SecurityGateNavigator`, session mount hook)
+  - `app/src/core/types/profile.ts` (`saveUserProfile`, `loadUserProfile`)
+  - `app/src/core/types/auth.ts` (`saveSecurityConfig`, `loadSecurityConfig`)
+  - `app/src/presentation/components/security/AuthGateScreen.tsx`
+- **Defect Type:** Data Persistence / Auth Architecture
+- **Severity:** 🔴 **Critical (High)**
+- **Priority:** **P0 (Highest)**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+When the user completely closes / force-quits the app from the Android recent apps switcher and relaunches it, all session and profile state is lost. Instead of preserving the authenticated state and prompting the user for their Master PIN (or future biometric unlock) to access their existing vault, the user is sent all the way back to the initial Welcome / Sign In / Onboarding sequence. Users must re-enter their details and undergo setup again.
+
+#### Expected Behavior
+- Once initial onboarding and PIN setup are completed after installation, the user's session, profile, and data must permanently persist across app closures and device restarts.
+- Completely terminating and relaunching the app should recognize the existing vault, transition directly to the **Lock Screen (`LOCKED` state)**, and allow the user to unlock with their Master PIN (and optional biometric authentication in the future).
+- Users must never be forced to re-enter onboarding data repeatedly once installed.
+
+#### Actual Behavior
+- When the Android app process terminates, the user session, PIN salt/hash, profile (`isOnboarded: true`), and security settings are completely erased.
+- Upon reopening, the app fails to locate any saved session, resets `authStatus` to `UNAUTHENTICATED`, and opens `AuthGateScreen` in `SIGNUP` mode, forcing the user through onboarding again.
+
+#### Steps to Reproduce
+1. Install and launch the v1.0.1 release APK.
+2. Complete Google login/auth, configure PIN, and complete all onboarding steps until the main dashboard is visible.
+3. Add or view transactions/accounts.
+4. Swipe up to recent apps and swipe away / force close Aegis Spendly.
+5. Reopen Aegis Spendly from the app drawer.
+6. Observe that the app displays the initial Sign In / Welcome screen instead of the PIN Lock screen.
+
+#### Technical Analysis (For Fix Phase Reference)
+- In `cryptoVault.ts` (lines 139–143, 155–159), `profile.ts` (lines 38–40, 51–53), and `auth.ts` (lines 36–38, 49–51), session storage uses `localStorage` with a fallback to `let memoryStorage: Record<string, string> = {}`.
+- In native React Native on Android (Hermes runtime), the browser `window.localStorage` global does **not** exist.
+- As a consequence, all auth session data, PIN hashes, and `isOnboarded` flags were being written to the transient JavaScript heap `memoryStorage` variable.
+- When Android kills the app process, `memoryStorage` is wiped. On restart, `loadAuthSession()` returns `null`, causing `useAuthSecurity.tsx` to set `authStatus = 'UNAUTHENTICATED'`.
+- Recommended fix when fix phase starts: Store auth session and user profile in native persistent storage:
+  - Option A: Persist auth credentials, profile, and security preferences directly inside the persistent native SQLite database (`aegis_finance.db`, via an `app_kv_store` / `auth_session` table) which already works natively via `expo-sqlite`.
+  - Option B: Integrate `@react-native-async-storage/async-storage` or `expo-secure-store` for native encrypted mobile key-value storage.
