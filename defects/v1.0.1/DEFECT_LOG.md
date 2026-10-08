@@ -15,10 +15,10 @@
 | **[DEF-003](#def-003-income-page-must-enforce-selecting-salary-credited-bank-to-proceed)** | Form Validation / Business Logic | Medium | Onboarding (Step 4 — Income) | Missing validation: user must be required to select at least one bank for salary credit before proceeding | 🟡 Logged (Open) |
 | **[DEF-004](#def-004-session-and-data-reset-on-complete-app-close-sent-back-to-onboarding)** | Data Persistence / Auth Architecture | 🔴 Critical (High) | Auth Lifecycle, CryptoVault & Local Storage | Closing app completely deletes session/profile, resetting user back to onboarding instead of preserving login and prompting for PIN | 🟡 Logged (Open) |
 | **[DEF-005](#def-005-sign-out-erases-vault-profiledata-and-pin-setup-lacks-security-importance-notice)** | Auth Architecture & UX Guidance | 🟠 High | Auth Lifecycle & PIN Setup Screen | Sign out must preserve vault data and allow re-opening via PIN; PIN setup must remind user that PIN is the sole recovery key | 🟡 Logged (Open) |
-| **[DEF-006](#def-006-top-right-profile-button-dropdown-hub-with-tabbed-sections--user-guide)** | UI/UX & Navigation | 🟡 Medium | Header, Profile Drawer & Sidebar | Profile button should be at top-right corner; dropdown must provide tabbed views (Accounts, Customise, Security, User Guide) | 🟡 Logged (Open) |
+| **[DEF-006](#def-006-top-right-profile-button-dropdown-hub-with-tabbed-sections--user-guide)** | UI/UX & Navigation | 🟡 Medium | Header, Profile Drawer & Sidebar | Profile button in top-right corner; opens dropdown with tabs (Accounts, Customise, Security, User Guide); top-left hamburger menu | 🟡 Logged (Open) |
 | **[DEF-007](#def-007-auto-delete-vault-on-failed-pin-attempts-slider-3-10-warning-prompts--double-pin-deletion)** | Security Architecture | 🟠 High | Lock Screen, Onboarding & Security Settings | Auto-delete vault on failed PIN attempts (slider 3–10) with Lock Screen remaining-attempts warning and double-PIN manual vault erasure | 🟡 Logged (Open) |
 | **[DEF-008](#def-008-hide-google-drive-sync-ui-and-onboarding-step-pending-phase-2)** | Feature Visibility / Rollout | 🟢 Low | Header, Onboarding Step 5 & Drawers | Temporarily hide Google Drive sync buttons, badges, and onboarding Step 5 without deleting the underlying codebase | 🟡 Logged (Open) |
-| **[DEF-009](#def-009-tiktok-style-centered-add-entry-button-on-bottom-navigation-tab-bar)** | Layout / UX Ergonomics | 🟡 Medium | TabBar & Responsive Canvas | Primary "+ Add Entry" button must be centered in the bottom navigation bar (TikTok style) across phones and tablets | 🟡 Logged (Open) |
+| **[DEF-009](#def-009-tiktok-style-centered-add-entry-button-on-bottom-navigation-tab-bar)** | Layout / UX Ergonomics | 🟡 Medium | TabBar & Responsive Canvas | TikTok-style elevated center [ + ] button flanked by 4 dedicated tabs: Expenses, Plan Ahead, Cards, and Banks | 🟡 Logged (Open) |
 
 ---
 
@@ -237,7 +237,7 @@ When the user completely closes / force-quits the app from the Android recent ap
 - **Reported Date:** 2026-10-08
 - **Platform:** Android (Release APK v1.0.1) & Responsive Web
 - **Component / Screen:**
-  - `app/src/presentation/components/SpendlyHeader.tsx` (Top-right button placement)
+  - `app/src/presentation/components/SpendlyHeader.tsx` (Top-right button placement & top-left hamburger)
   - `app/src/presentation/components/drawers/ProfileDrawer.tsx` (Tabbed modal/dropdown redesign)
   - `app/src/presentation/components/SpendlySidebar.tsx` / `MobileNavDrawer.tsx` (Expanding user guide)
 - **Defect Type:** UI/UX & Navigation
@@ -246,10 +246,13 @@ When the user completely closes / force-quits the app from the Android recent ap
 - **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
 
 #### Description
-The profile button is currently positioned mid-header rather than anchored in the top-right corner as standard in modern web and mobile applications. Furthermore, user settings and options are fragmented across multiple disparate drawers and buttons. The profile button dropdown/modal needs to be consolidated into a cohesive multi-tab hub with dedicated sections.
+The profile button is currently positioned mid-header rather than anchored in the top-right corner as standard in modern web and mobile applications (as drawn in the user's layout sketch). Furthermore, user settings and options are fragmented across multiple disparate drawers and buttons. The profile button dropdown/modal needs to be consolidated into a cohesive multi-tab hub with dedicated sections.
 
 #### Expected Behavior
-1. **Top-Right Positioning:** The Profile button/avatar must sit at the top-right corner of the header.
+1. **Top Navigation Layout (per wireframe sketch):**
+   - **Top-Left:** Hamburger menu icon (`≡`) for expanding navigation sidebar.
+   - **Top-Right:** Circular Profile button/avatar (`O`) anchored at the far top-right corner.
+   - **Main Body:** Header profile greeting and financial overview cards.
 2. **Tabbed Hub Dropdown/Drawer:** Tapping the Profile button opens a consolidated menu with 4 distinct tabs:
    - **Accounts Details Tab:** Complete overview and management of bank accounts and credit cards.
    - **Customise Tab:** Custom profile avatar selection and application theme preset picker.
@@ -356,17 +359,32 @@ Google Drive buttons, sync status pills, and the entire Step 5 onboarding form a
 - **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
 
 #### Description
-The primary action for creating a financial record ("Add Entry") should be anchored directly in the center of the bottom navigation bar (similar to the elevated center create button in TikTok). This ensures an ergonomic, thumb-friendly primary action that remains consistent and centered across phone and tablet display sizes.
+The bottom navigation bar must follow the user's reference drawing: an elevated TikTok-style circular `+` button in the exact center, flanked by 4 dedicated feature tabs:
+1. **Button 1 (Leftmost):** Expense Tracker / Ledger screen (`E`)
+2. **Button 2 (Center-Left):** Next Month Plan Ahead Commitments (`↗` / `M`)
+3. **Button 3 (Center Action):** Big Elevated TikTok-style `+` Add Entry button
+4. **Button 4 (Center-Right):** Credit Cards screen
+5. **Button 5 (Rightmost):** Bank Accounts screen
+
+#### Visual Evidence (User Wireframe Reference)
+![DEF-009 Wireframe Reference](./assets/DEF-009_bottom_bar_wireframe.jpg)
 
 #### Expected Behavior
-- The bottom navigation bar should feature a prominent, elevated, centered "+" button between the left and right navigation tabs (e.g., [Overview, Entries] — [ + ] — [Cards, Profile]).
-- The center button should be styled with a distinctive elevated pill or circle (TikTok aesthetic) and trigger the Add Entry drawer.
-- The button must remain centered and responsive across varying screen widths (phones and rotated tablets) without drifting or clipping.
+- The bottom navigation bar consists of the 5 distinct tabs illustrated in the wireframe:
+  - Tab 1: **Expenses** (`TRANSACTIONS`) — Expense tracker page.
+  - Tab 2: **Plan Ahead** (`PLAN_AHEAD`) — Next month commitments & obligations.
+  - Center: **[ + ]** — Primary elevated action button (opens Add Entry drawer).
+  - Tab 3: **Cards** (`CREDIT_CARDS`) — Credit cards overview.
+  - Tab 4: **Banks** (`BANKS`) — Bank accounts overview.
+- The center `+` button is visually elevated (TikTok aesthetic), centered, and accessible across phone and tablet modes.
+- Profile is moved to the top-right header corner (per `DEF-006`), freeing the 5th bottom slot for Bank Accounts.
 
 #### Actual Behavior
-- In desktop/tablet mode (`width >= 768`), the bottom TabBar is entirely hidden and replaced with a top-header Add button that can touch screen borders on rotation (as logged in `DEF-002`).
-- On mobile, while the plus button exists, its styling, centering constraints, and touch area need refinement to achieve the intended TikTok-style elevated primary action.
+- Currently, `TabBar.tsx` contains: Overview, Entries, Center Plus, Cards, and Profile.
+- Bank Accounts and Plan Ahead were not directly accessible from the bottom bar.
+- On desktop/tablet mode (`width >= 768`), the bottom bar was hidden entirely in favor of top-header buttons.
 
 #### Technical Analysis (For Fix Phase Reference)
-- In `TabBar.tsx`, refine `centerButtonContainer` and `bigPlusButton` with elevated accent styling, shadow elevation, and balanced horizontal tab spacing.
-- In `App.tsx`, ensure bottom bar layout and center button auto-fit adaptively across tablet orientations instead of being hidden abruptly.
+- In `TabBar.tsx`, update tab items to: `TRANSACTIONS` (Expenses), `PLAN_AHEAD` (Commitments), Center `+` button, `CREDIT_CARDS` (Cards), and `BANKS` (Bank Accounts).
+- Update `App.tsx` navigation state to render the corresponding screen upon selecting any of the 5 tabs.
+- Apply elevated styling (`marginTop: -18`, larger circular container, shadow/elevation) to the center `+` button.
