@@ -15,6 +15,10 @@
 | **[DEF-003](#def-003-income-page-must-enforce-selecting-salary-credited-bank-to-proceed)** | Form Validation / Business Logic | Medium | Onboarding (Step 4 — Income) | Missing validation: user must be required to select at least one bank for salary credit before proceeding | 🟡 Logged (Open) |
 | **[DEF-004](#def-004-session-and-data-reset-on-complete-app-close-sent-back-to-onboarding)** | Data Persistence / Auth Architecture | 🔴 Critical (High) | Auth Lifecycle, CryptoVault & Local Storage | Closing app completely deletes session/profile, resetting user back to onboarding instead of preserving login and prompting for PIN | 🟡 Logged (Open) |
 | **[DEF-005](#def-005-sign-out-erases-vault-profiledata-and-pin-setup-lacks-security-importance-notice)** | Auth Architecture & UX Guidance | 🟠 High | Auth Lifecycle & PIN Setup Screen | Sign out must preserve vault data and allow re-opening via PIN; PIN setup must remind user that PIN is the sole recovery key | 🟡 Logged (Open) |
+| **[DEF-006](#def-006-top-right-profile-button-dropdown-hub-with-tabbed-sections--user-guide)** | UI/UX & Navigation | 🟡 Medium | Header, Profile Drawer & Sidebar | Profile button should be at top-right corner; dropdown must provide tabbed views (Accounts, Customise, Security, User Guide) | 🟡 Logged (Open) |
+| **[DEF-007](#def-007-auto-delete-vault-on-failed-pin-attempts-slider-3-10-warning-prompts--double-pin-deletion)** | Security Architecture | 🟠 High | Lock Screen, Onboarding & Security Settings | Auto-delete vault on failed PIN attempts (slider 3–10) with Lock Screen remaining-attempts warning and double-PIN manual vault erasure | 🟡 Logged (Open) |
+| **[DEF-008](#def-008-hide-google-drive-sync-ui-and-onboarding-step-pending-phase-2)** | Feature Visibility / Rollout | 🟢 Low | Header, Onboarding Step 5 & Drawers | Temporarily hide Google Drive sync buttons, badges, and onboarding Step 5 without deleting the underlying codebase | 🟡 Logged (Open) |
+| **[DEF-009](#def-009-tiktok-style-centered-add-entry-button-on-bottom-navigation-tab-bar)** | Layout / UX Ergonomics | 🟡 Medium | TabBar & Responsive Canvas | Primary "+ Add Entry" button must be centered in the bottom navigation bar (TikTok style) across phones and tablets | 🟡 Logged (Open) |
 
 ---
 
@@ -224,3 +228,145 @@ When the user completely closes / force-quits the app from the Android recent ap
 - Disentangle session logout from vault credential deletion in `useAuthSecurity.tsx` and `cryptoVault.ts`. Persist vault credentials in SQLite under user identifier.
 - When `signOut()` is called, only clear the active unencrypted session state (`authStatus: 'UNAUTHENTICATED'`), while retaining the user's profile and hashed PIN in permanent storage so returning with the same account immediately routes to `LOCKED` (PIN unlock) rather than new account onboarding.
 - Update `PinSetupScreen.tsx` with an alert/banner card explaining the importance of the Master PIN for accessing device data.
+
+---
+
+### DEF-006: Top-right profile button dropdown hub with tabbed sections & user guide
+
+- **Defect ID:** `DEF-006`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1) & Responsive Web
+- **Component / Screen:**
+  - `app/src/presentation/components/SpendlyHeader.tsx` (Top-right button placement)
+  - `app/src/presentation/components/drawers/ProfileDrawer.tsx` (Tabbed modal/dropdown redesign)
+  - `app/src/presentation/components/SpendlySidebar.tsx` / `MobileNavDrawer.tsx` (Expanding user guide)
+- **Defect Type:** UI/UX & Navigation
+- **Severity:** 🟡 **Medium**
+- **Priority:** **P1**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+The profile button is currently positioned mid-header rather than anchored in the top-right corner as standard in modern web and mobile applications. Furthermore, user settings and options are fragmented across multiple disparate drawers and buttons. The profile button dropdown/modal needs to be consolidated into a cohesive multi-tab hub with dedicated sections.
+
+#### Expected Behavior
+1. **Top-Right Positioning:** The Profile button/avatar must sit at the top-right corner of the header.
+2. **Tabbed Hub Dropdown/Drawer:** Tapping the Profile button opens a consolidated menu with 4 distinct tabs:
+   - **Accounts Details Tab:** Complete overview and management of bank accounts and credit cards.
+   - **Customise Tab:** Custom profile avatar selection and application theme preset picker.
+   - **Security Tab:** Lock idle timer, Update Master PIN, Auto-delete vault on failed PIN attempts (toggle + slider 3–10), and manual "Delete Vault" action (requiring 2x PIN confirmation).
+   - **User Guide Tab:** Clear, user-friendly instructions explaining how the app and its features function (accessible either within the profile modal tabs or the expanding navigation sidebar).
+
+#### Actual Behavior
+- The Profile chip is placed to the left of the Add Entry, theme settings, and lock buttons on desktop/tablet views.
+- Settings, themes, accounts, and profile features are split across separate floating buttons (`color-palette-outline`, `SettingsDrawer`, `ProfileDrawer`).
+- There is no unified tabbed organization and no built-in User Guide.
+
+#### Technical Analysis (For Fix Phase Reference)
+- Restructure `SpendlyHeader.tsx` to move the Profile avatar/button to the far right.
+- Redesign `ProfileDrawer.tsx` (or new `ProfileHubModal.tsx`) into a tabbed layout (`ACCOUNTS`, `CUSTOMISE`, `SECURITY`, `USER_GUIDE`).
+- Consolidate theme picker logic from `SettingsDrawer.tsx` into the Customise tab, and security configuration into the Security tab.
+
+---
+
+### DEF-007: Auto-delete vault on failed PIN attempts (slider 3–10), warning prompts & double-PIN deletion
+
+- **Defect ID:** `DEF-007`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1)
+- **Component / Screen:**
+  - `app/src/presentation/components/security/LockScreen.tsx` (Wrong PIN countdown warning)
+  - `app/src/presentation/components/onboarding/OnboardingScreen.tsx` (Security configuration step)
+  - `app/src/core/security/rateLimiter.ts` & `useAuthSecurity.tsx` (Threshold wipe trigger)
+  - `app/src/core/types/auth.ts` (`autoDeleteEnabled`, `autoDeleteThreshold`)
+- **Defect Type:** Security Architecture & UX Safety
+- **Severity:** 🟠 **High**
+- **Priority:** **P1**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+1. **Auto-Delete on Wrong PIN Attempts:** Users need a privacy protection feature where entering too many incorrect PIN attempts automatically wipes the encrypted vault from the device. This feature requires an ON/OFF toggle and an adjustable slider from 3 to 10 attempts.
+2. **Lock Screen Countdown Warning:** When this feature is active and a wrong PIN is entered on `LockScreen`, a warning banner must alert the user: *"Incorrect PIN. Vault will be permanently erased after X more wrong attempts."*
+3. **Onboarding Integration:** These settings (toggle + 3-10 slider) must also be introduced during the security configuration step of onboarding.
+4. **Manual Delete Vault with 2x PIN Confirmation:** A manual "Delete Vault" option in the Security settings must require entering the Master PIN twice consecutively to prevent accidental erasure.
+
+#### Expected Behavior
+- Security settings in onboarding and the profile security tab include:
+  - Toggle: **Auto-delete vault on failed attempts** (ON / OFF).
+  - Slider: Threshold from **3 to 10** wrong attempts.
+- On `LockScreen.tsx`: Entering a wrong PIN calculates remaining attempts and shows an alert banner warning of imminent erasure.
+- Reaching 0 remaining attempts executes a complete SQLite wipe (`DROP`/`DELETE`) and session reset.
+- Manual vault deletion requires entering the Master PIN twice before deleting.
+
+#### Actual Behavior
+- `rateLimiter.ts` currently applies a 30-second lockout delay after 5 failed attempts, but there is no configurable auto-deletion toggle, no 3–10 slider, and no explicit warning that data will be wiped.
+- There is no double-PIN confirmation prompt for manual vault deletion.
+
+#### Technical Analysis (For Fix Phase Reference)
+- Add `autoDeleteOnFailedPin: boolean` and `autoDeleteThreshold: number` (default 5, range 3–10) to `AuthSecurityConfig` in `auth.ts`.
+- In `OnboardingScreen.tsx` (Step 6) and the new Profile Security tab, render a toggle switch and a custom slider component (3 to 10).
+- Update `LockScreen.tsx` to display dynamic remaining attempt warnings when the toggle is enabled.
+- Add a 2-step PIN entry modal for the manual "Delete Vault" action in `ProfileDrawer` / `SettingsDrawer`.
+
+---
+
+### DEF-008: Hide Google Drive sync UI and onboarding step (pending Phase 2)
+
+- **Defect ID:** `DEF-008`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1) & Web
+- **Component / Screen:**
+  - `app/src/presentation/components/SpendlyHeader.tsx` (Header sync buttons & pills)
+  - `app/src/presentation/components/onboarding/OnboardingScreen.tsx` (Step 5 — Google Drive Storage)
+  - `app/src/presentation/components/SpendlySidebar.tsx` & `MobileNavDrawer.tsx` (Drawer sync links)
+- **Defect Type:** Feature Visibility / Phased Rollout
+- **Severity:** 🟢 **Low**
+- **Priority:** **Normal**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+Google Drive cloud sync is scheduled for Phase 2 and is not currently functional/connected. The presence of Google Drive buttons, sync toasts, and the dedicated Step 5 onboarding screen ("Choose Google Drive Folder") causes confusion during testing. These UI elements must be temporarily hidden from the user interface while preserving all underlying code for Phase 2 activation.
+
+#### Expected Behavior
+- **Header:** Hide the Google Sheets sync button on desktop/tablet and the sync pill on mobile headers.
+- **Onboarding:** Remove/hide **Step 5: Google Drive Storage** from the onboarding sequence (so users transition directly from Step 4 Income to Step 6 Security Lock Policy), without deleting the step's code.
+- **Drawers:** Hide Google Drive sync links in `SpendlySidebar.tsx` and `MobileNavDrawer.tsx`.
+- **Code Preservation:** All existing Google Drive sync specifications, services, and components must remain untouched in the codebase.
+
+#### Actual Behavior
+Google Drive buttons, sync status pills, and the entire Step 5 onboarding form are prominently displayed in the v1.0.1 release APK.
+
+#### Technical Analysis (For Fix Phase Reference)
+- In `OnboardingScreen.tsx`, adjust the step transition so Step 4 (SALARY) navigates directly to Step 6 (SECURITY), and remove 'DRIVE' from the visible step list without deleting the render block.
+- In `SpendlyHeader.tsx`, conditionally render or comment out `syncButtonGroup` and mobile `syncBtnSmall`.
+- In `SpendlySidebar.tsx` and `MobileNavDrawer.tsx`, hide the sync modal trigger items.
+
+---
+
+### DEF-009: TikTok-style centered "Add Entry" button on bottom navigation tab bar
+
+- **Defect ID:** `DEF-009`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Phones & Tablets)
+- **Component / Screen:**
+  - `app/src/presentation/components/TabBar.tsx`
+  - `app/src/App.tsx` (Bottom bar layout across viewports)
+- **Defect Type:** Layout / UX Ergonomics
+- **Severity:** 🟡 **Medium**
+- **Priority:** **Normal**
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+The primary action for creating a financial record ("Add Entry") should be anchored directly in the center of the bottom navigation bar (similar to the elevated center create button in TikTok). This ensures an ergonomic, thumb-friendly primary action that remains consistent and centered across phone and tablet display sizes.
+
+#### Expected Behavior
+- The bottom navigation bar should feature a prominent, elevated, centered "+" button between the left and right navigation tabs (e.g., [Overview, Entries] — [ + ] — [Cards, Profile]).
+- The center button should be styled with a distinctive elevated pill or circle (TikTok aesthetic) and trigger the Add Entry drawer.
+- The button must remain centered and responsive across varying screen widths (phones and rotated tablets) without drifting or clipping.
+
+#### Actual Behavior
+- In desktop/tablet mode (`width >= 768`), the bottom TabBar is entirely hidden and replaced with a top-header Add button that can touch screen borders on rotation (as logged in `DEF-002`).
+- On mobile, while the plus button exists, its styling, centering constraints, and touch area need refinement to achieve the intended TikTok-style elevated primary action.
+
+#### Technical Analysis (For Fix Phase Reference)
+- In `TabBar.tsx`, refine `centerButtonContainer` and `bigPlusButton` with elevated accent styling, shadow elevation, and balanced horizontal tab spacing.
+- In `App.tsx`, ensure bottom bar layout and center button auto-fit adaptively across tablet orientations instead of being hidden abruptly.
