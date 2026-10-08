@@ -20,6 +20,7 @@
 | **DEF-016** | Transaction Rows Lack In-Place Editing Capability | Transactions Ledger | Medium | User | 🔴 Open | Pending Fix |
 | **DEF-017** | Inactivity-Based Idle Screen Lock vs. Fixed Inopportune Timer | Security / useAuthSecurity | High | User | 🔴 Open | Pending Fix |
 | **DEF-018** | Transactions Filtered by Month While Sidebar Badge & Overview Display Mismatched Counts | Navigation / Month Filter | Medium | User | 🔴 Open | Pending Fix |
+| **DEF-019** | Global Month/Year Sync Across Cards & Banks, Interactive Bar Chart Tap, & Custom Header Picker | Navigation / App-Wide State | Medium | User | 🔴 Open | Pending Fix |
 
 ---
 
@@ -198,4 +199,29 @@ When the user switches the header month selector away from the month in which tr
   4. Segregate opening balances from regular monthly transactions.
 * **Actual:** Transactions screen shows empty while sidebar badge says 4 and Overview shows October entries.
 * **Evidence:** `defects/v1.0.2/assets/DEF-018_transactions_month_filter_empty.jpg`, `defects/v1.0.2/assets/DEF-018_overview_mismatched_month_list.jpg`
+
+---
+
+### DEF-019: Global Month/Year Sync Across Cards & Banks, Interactive Bar Chart Tap, & Custom Header Picker
+
+* **Defect ID:** `DEF-019`
+* **Module:** Navigation, Header Month/Year Picker, Cards & Banks Screens, Overview Chart
+* **Severity:** Medium
+* **Discovered In:** Android Release APK v1.0.2 (Build 3)
+* **Status:** 🔴 Open
+
+#### 📝 Description
+1. The header dropdown only allows selecting from a fixed list rather than picking/entering arbitrary Month and Year combinations.
+2. When the user changes the month in the header, Cards and Banks screens do not filter their transaction histories or monthly views to match that month.
+3. The Overview bar graph is purely static; users cannot tap any bar to highlight and select that month.
+4. Empty months must not prepare or show fake/dummy fillup data.
+
+#### 🎯 Expected vs. Actual Behavior
+* **Expected:**
+  1. Header Month & Year picker enables choosing any Month and Year.
+  2. Full app-wide synchronization: Overview, Transactions, Cards, Banks, and Sidebar badge all update consistently to reflect only the selected month.
+  3. Interactive Bar Chart: Tapping any bar on Overview highlights the bar and activates that month throughout the app.
+  4. Real data only: Months with no movements show 0/empty with zero artificial fillup data.
+* **Actual:** Month filter was disconnected across screens, lacked bar tapping, and lacked a flexible Month+Year picker.
+
 
