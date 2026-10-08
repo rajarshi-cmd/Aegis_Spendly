@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
@@ -18,7 +19,7 @@ import { loadUserProfile } from '../../../core/types/profile';
 
 export const AuthGateScreen: React.FC = () => {
   const { colors, themeName } = useTheme();
-  const { signInWithGoogle } = useAuthSecurity();
+  const { signInWithGoogle, createNewVault } = useAuthSecurity();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -47,14 +48,43 @@ export const AuthGateScreen: React.FC = () => {
         Alert.alert('Email Required', 'Please enter your Google account email address.');
         return;
       }
-      setIsLoading(true);
-      try {
-        await signInWithGoogle({
-          email: emailInput.trim(),
-          name: nameInput.trim() || 'Spendly User',
-        });
-      } finally {
-        setIsLoading(false);
+
+      const proceedWithNewVault = async () => {
+        setIsLoading(true);
+        try {
+          await createNewVault({
+            email: emailInput.trim(),
+            name: nameInput.trim() || 'Spendly User',
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      if (hasExistingVault) {
+        if (Platform.OS === 'web') {
+          const confirmed = typeof window !== 'undefined' && window.confirm(
+            'Replace Existing Vault?\n\nAn existing vault is currently saved on this device. Initializing a new vault will replace local database records.\n\nDo you wish to continue?'
+          );
+          if (confirmed) {
+            await proceedWithNewVault();
+          }
+        } else {
+          Alert.alert(
+            'Replace Existing Vault?',
+            'An existing vault is currently saved on this device. Initializing a new vault will replace local database records. Ensure you have backed up any necessary data.\n\nDo you wish to continue?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Create New Vault',
+                style: 'destructive',
+                onPress: proceedWithNewVault,
+              },
+            ]
+          );
+        }
+      } else {
+        await proceedWithNewVault();
       }
     } else {
       // Login existing vault

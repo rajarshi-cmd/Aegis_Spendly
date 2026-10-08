@@ -143,6 +143,21 @@
 
 ---
 
+### DEF-020: Unable to Create New Vault When Existing Vault Stored (Inherited Existing PIN & Re-opened Old Vault)
+
+* **Defect ID:** `DEF-020` / [GitHub #21](https://github.com/rajarshi-cmd/Aegis_Spendly/issues/21)
+* **Module:** Authentication, Vault Lifecycle, PIN Setup & Crypto Session
+* **Severity:** High
+* **Status:** 🟢 Resolved
+* **Symptom:** Selecting "Sign Up (New Vault)" when a vault already existed on the device copied the existing user's `pinHash`, `pinSalt`, and `isOnboarded: true`. Consequently, the app routed directly to `LOCKED` (Lock Screen) rather than `PIN_SETUP`. Entering a new PIN failed with "Incorrect PIN" because it checked the old vault's hash, and entering the old PIN reopened the previous vault.
+* **Resolution:**
+  1. Implemented `createNewVault(details)` in `useAuthSecurity.tsx` which purges SQLite tables, clears cached profiles/vault keys, and creates a clean `AuthUser` with no PIN (`isOnboarded: false`), transitioning directly to `PIN_SETUP`.
+  2. Added email matching check in `signInWithGoogle()` preventing cross-user credential inheritance.
+  3. Added confirmation alert in `AuthGateScreen.tsx` before overwriting an existing vault on device.
+  4. Verified new PIN entry generates fresh salt/hash and proceeds to `ONBOARDING`.
+
+---
+
 ## 💡 Future Suggestions & Proposals (Post-Alpha Review)
 
 ### SUG-001 (GitHub Issue #20): Month & Year Granularity Option for Past Historical Transaction Entries

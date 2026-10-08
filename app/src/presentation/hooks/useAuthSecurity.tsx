@@ -29,6 +29,7 @@ interface AuthSecurityContextType {
   remainingAttemptsBeforeWipe: number | null;
   updateConfig: (partial: Partial<AuthSecurityConfig>) => void;
   signInWithGoogle: (customDetails?: Partial<AuthUser>) => Promise<void>;
+  createNewVault: (details: { email: string; name?: string }) => Promise<void>;
   setupPin: (pin: string) => Promise<boolean>;
   updatePin: (newPin: string) => Promise<boolean>;
   unlockWithPin: (pin: string) => Promise<boolean>;
@@ -203,15 +204,23 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const signInWithGoogle = useCallback(async (customDetails?: Partial<AuthUser>) => {
     const existing = loadAuthSession();
+    // Only inherit existing credentials if this is genuinely the same existing user email
+    const isSameUser = !!(
+      existing &&
+      existing.email &&
+      customDetails?.email &&
+      existing.email.toLowerCase() === customDetails.email.toLowerCase()
+    );
+
     const newUser: AuthUser = {
-      id: customDetails?.id || existing?.id || 'usr_google_' + Date.now().toString(36),
+      id: customDetails?.id || (isSameUser ? existing?.id : undefined) || 'usr_google_' + Date.now().toString(36),
       email: customDetails?.email || existing?.email || '',
-      name: customDetails?.name || existing?.name || '',
-      username: customDetails?.username || existing?.username || '',
-      photoUrl: customDetails?.photoUrl || existing?.photoUrl,
-      pinSalt: existing?.pinSalt,
-      pinHash: existing?.pinHash,
-      isOnboarded: existing?.isOnboarded ?? false,
+      name: customDetails?.name || (isSameUser ? existing?.name : undefined) || 'Spendly User',
+      username: customDetails?.username || (isSameUser ? existing?.username : undefined) || customDetails?.email?.split('@')[0] || 'user',
+      photoUrl: customDetails?.photoUrl || (isSameUser ? existing?.photoUrl : undefined),
+      pinSalt: isSameUser ? existing?.pinSalt : undefined,
+      pinHash: isSameUser ? existing?.pinHash : undefined,
+      isOnboarded: isSameUser ? (existing?.isOnboarded ?? false) : false,
     };
 
     setUser(newUser);
@@ -226,6 +235,50 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } else {
       setAuthStatus('PIN_SETUP');
     }
+  }, []);
+
+  const createNewVault = useCallback(async (details: { email: string; name?: string }): Promise<void> => {
+    // 1. Purge existing SQLite database tables to ensure clean slate
+    try {
+      const db = await getDatabase();
+      await db.run('DELETE FROM transactions;');
+      await db.run('DELETE FROM debts;');
+      await db.run('DELETE FROM settlements;');
+      await db.run('DELETE FROM recurring_obligations;');
+      await db.run('DELETE FROM investments;');
+      await db.run('DELETE FROM accounts;');
+    } catch (e) {
+      console.warn('[AuthSecurity] Failed to purge SQLite tables for new vault', e);
+    }
+
+    // 2. Clear stored user profile & budget/init keys
+    clearUserProfile();
+    kvStorage.removeItem('aegis_vault_initialized');
+    kvStorage.removeItem('aegis_planned_budgets');
+
+    // 3. Clear existing auth session
+    clearAuthSession();
+
+    // 4. Create fresh AuthUser without PIN, ready for PIN setup and onboarding
+    const trimmedEmail = details.email.trim();
+    const newUser: AuthUser = {
+      id: 'usr_google_' + Date.now().toString(36),
+      email: trimmedEmail,
+      name: details.name?.trim() || 'Spendly User',
+      username: trimmedEmail.split('@')[0] || 'user',
+      pinSalt: undefined,
+      pinHash: undefined,
+      isOnboarded: false,
+    };
+
+    setUser(newUser);
+    saveAuthSession(newUser);
+    setFailedPinAttempts(0);
+    setLockoutUntil(null);
+    setLockoutRemainingSeconds(0);
+
+    // 5. Explicitly transition to PIN_SETUP for the new vault
+    setAuthStatus('PIN_SETUP');
   }, []);
 
   const setupPin = useCallback(
@@ -403,6 +456,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         remainingAttemptsBeforeWipe,
         updateConfig,
         signInWithGoogle,
+        createNewVault,
         setupPin,
         updatePin,
         unlockWithPin,

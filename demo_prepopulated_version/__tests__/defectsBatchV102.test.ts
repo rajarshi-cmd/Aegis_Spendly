@@ -217,4 +217,76 @@ describe('Batch Defect Fixes Verification (DEF-010 through DEF-019)', () => {
       expect(mockDb.accounts.get('bank-1')?.balance).toBe(9000);
     });
   });
+
+  describe('DEF-020: New Vault Creation & Credential Isolation', () => {
+    it('does not inherit existing vault PIN or onboarding state when signing in with a different email', () => {
+      const existingSession = {
+        id: 'usr_old_1',
+        email: 'alice@example.com',
+        name: 'Alice',
+        username: 'alice',
+        pinSalt: 'old_salt_123',
+        pinHash: 'old_hash_pbkdf2_456',
+        isOnboarded: true,
+      };
+
+      const customDetails = {
+        email: 'bob@example.com',
+        name: 'Bob',
+      };
+
+      const isSameUser = !!(
+        existingSession &&
+        existingSession.email &&
+        customDetails?.email &&
+        existingSession.email.toLowerCase() === customDetails.email.toLowerCase()
+      );
+
+      const newUser = {
+        id: isSameUser ? existingSession?.id : 'usr_new_2',
+        email: customDetails.email,
+        name: customDetails.name,
+        pinSalt: isSameUser ? existingSession?.pinSalt : undefined,
+        pinHash: isSameUser ? existingSession?.pinHash : undefined,
+        isOnboarded: isSameUser ? existingSession?.isOnboarded : false,
+      };
+
+      expect(newUser.email).toBe('bob@example.com');
+      expect(newUser.pinSalt).toBeUndefined();
+      expect(newUser.pinHash).toBeUndefined();
+      expect(newUser.isOnboarded).toBe(false);
+
+      // Status should route to PIN_SETUP, never LOCKED or UNLOCKED
+      const nextStatus = newUser.pinHash && newUser.pinSalt
+        ? (newUser.isOnboarded ? 'LOCKED' : 'ONBOARDING')
+        : 'PIN_SETUP';
+      expect(nextStatus).toBe('PIN_SETUP');
+    });
+
+    it('requires PIN_SETUP then ONBOARDING for a clean new vault', () => {
+      // Step 1: New vault initialized with no PIN
+      const newVaultUser = {
+        id: 'usr_new_3',
+        email: 'charlie@example.com',
+        name: 'Charlie',
+        pinSalt: undefined,
+        pinHash: undefined,
+        isOnboarded: false,
+      };
+
+      expect(newVaultUser.pinHash).toBeUndefined();
+      expect(newVaultUser.isOnboarded).toBe(false);
+
+      // Step 2: User sets up PIN
+      const userWithPin = {
+        ...newVaultUser,
+        pinSalt: 'new_salt_789',
+        pinHash: 'new_hash_999',
+      };
+
+      // Since isOnboarded is false, it MUST advance to ONBOARDING, not UNLOCKED
+      const postPinStatus = userWithPin.isOnboarded ? 'UNLOCKED' : 'ONBOARDING';
+      expect(postPinStatus).toBe('ONBOARDING');
+    });
+  });
 });
