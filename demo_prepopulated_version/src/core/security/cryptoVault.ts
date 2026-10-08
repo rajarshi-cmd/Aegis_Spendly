@@ -107,7 +107,7 @@ export function clearAuthSession(): void {
 }
 
 // Compact SHA-256 helper for pure environments
-function fallbackSha256(ascii: string): string {
+export function fallbackSha256(ascii: string): string {
   function rightRotate(value: number, amount: number) {
     return (value >>> amount) | (value << (32 - amount));
   }

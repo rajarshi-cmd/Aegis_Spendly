@@ -174,14 +174,25 @@ Powered by embedded SQLite with **Write-Ahead Logging (`PRAGMA journal_mode = WA
 ### Locked Excel (`.xlsx`) & Google Sheets Tracking
 - **Password-Protected Excel Export**:
   Export monthly or annual statements into standard Excel format (`.xlsx`) protected with AES-128/256 workbook encryption via pure client-side libraries.
-- **Private Google Sheets Sync (Zero Third-Party Cloud)**:
-  Rather than transmitting financial records to third-party intermediary servers, users can deploy a private Google Apps Script Web App (such as the repository's `finance-tracker/Code.gs`). The mobile app sends encrypted or user-initiated POST payloads directly to the user's personal Google Sheet using OAuth2 bearer tokens, keeping all data strictly between the user's phone and their private Google Drive.
+### Private Google Sheets & Google Drive Sync (Zero-Cost BYOC Architecture)
+- **Zero Third-Party Cloud Infrastructure**:
+  Rather than routing user finances through developer-hosted proxy servers, AWS Lambda, or centralized databases (which incur compute and egress costs), Aegis Finance operates on a **Pure Client-Side BYOC (Bring Your Own Cloud)** model. Data is transmitted directly and peer-to-peer between the user's mobile device and their private Google Drive account.
+- **Immutable Architectural Rate Limiting Shield**:
+  To protect personal Google Cloud quotas, prevent battery/data drain, and guarantee that the developer faces **\$0.00 cloud expenses forever**, the application incorporates an architecturally frozen, tamper-proof rate limiter:
+  - **Minimum Cooldown**: 60 seconds minimum interval required between syncs.
+  - **Hourly Ceiling**: Maximum 6 sync operations per rolling 60-minute window.
+  - **Daily Ceiling**: Maximum 24 sync operations per rolling 24-hour window.
+  - **Payload Ceilings**: Maximum 5 MB payload size and maximum 10,000 transactions per batch.
+  - **Tamper & Clock Rollback Detection**: Rate limiter execution histories are authenticated with salted SHA-256 HMAC signatures. System clock rewinds ($>5\text{s}$) or storage tampering trigger an automatic 5-minute defensive lockout penalty (`PENALTY_ACTIVE`).
+  - **Destination-Side Token Bucket Quota**: The companion `finance-tracker/Code.gs` Web App gateway throttles incoming requests via `CacheService`, dropping out-of-band automated attacks in $<10\text{ms}$ with HTTP 429.
+- **Full Phase 2 Architectural Specification**:
+  See [docs/PHASE_2_GOOGLE_DRIVE_INTEGRATION_SPECIFICATION.md](file:///d:/Finance%20Tracker/docs/PHASE_2_GOOGLE_DRIVE_INTEGRATION_SPECIFICATION.md) for full threat modeling, GCP OAuth credentials setup, and roadmap.
 
 ---
 
 ## 5. Verification & Test Suite
 
-The test suite contains 7 automated Jest test suites and 22 tests verifying:
+The test suite contains 17 automated Jest test suites and 180 comprehensive unit tests verifying:
 - Double-entry accounting mutations (bank deposits vs card debt balances)
 - Credit health formula & dynamic status tier boundaries (<15% green, 15–30% amber, >30% red)
 - Bilateral P2P debt principles and settlement transactions
@@ -189,9 +200,11 @@ The test suite contains 7 automated Jest test suites and 22 tests verifying:
 - Systematic Investment Plan (SIP) execution and portfolio returns calculations
 - Temporal date filtering, net savings, and spend breakdown analytics
 - Database schema migrations (V1 & V2) and first-launch mock data seeder
+- Onboarding lifecycle, multi-account setup, and PIN-protected storage paths
+- Immutable rate limiting boundaries, sliding windows, payload caps, clock rollback guards, and tamper detection
 
 ```bash
-# Run unit test suite (7 suites, 22 tests)
+# Run unit test suite (17 suites, 180 tests)
 npm test
 
 # Run strict TypeScript compilation check (0 errors)

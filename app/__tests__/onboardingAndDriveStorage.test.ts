@@ -19,10 +19,12 @@ import {
   DEFAULT_AUTH_CONFIG,
 } from '../src/core/types/auth';
 import { GoogleSheetsSyncEngine } from '../src/core/engines/googleSheetsEngine';
+import { RateLimiter } from '../src/core/security/rateLimiter';
 
 describe('Onboarding, Drive Storage & Auto-Lock Security Tests', () => {
   beforeEach(() => {
     clearUserProfile();
+    RateLimiter.resetForTesting();
   });
 
   describe('User Profile & Identity Persistence', () => {

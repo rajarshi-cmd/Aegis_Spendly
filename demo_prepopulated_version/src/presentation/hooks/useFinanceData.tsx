@@ -43,6 +43,7 @@ import {
   SyncScheduleConfig,
   DEFAULT_SYNC_CONFIG,
   SyncResult,
+  RateLimitCheckResult,
   loadSyncConfig,
   saveSyncConfig,
 } from '../../core/types/sync';
@@ -150,6 +151,8 @@ export interface FinanceDataContextType {
   isSyncing: boolean;
   lastSyncResult: SyncResult | null;
   pendingChangesCount: number;
+  rateLimitStatus: RateLimitCheckResult;
+  refreshRateLimitStatus: () => RateLimitCheckResult;
   initializeUserVault: (
     userBanks: Array<{ name: string; balance: number; minimum_balance?: number | null }>,
     userCards: Array<{
@@ -187,6 +190,15 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+  const [rateLimitStatus, setRateLimitStatus] = useState<RateLimitCheckResult>(() =>
+    GoogleSheetsSyncEngine.getRateLimitStatus()
+  );
+
+  const refreshRateLimitStatus = useCallback((): RateLimitCheckResult => {
+    const status = GoogleSheetsSyncEngine.getRateLimitStatus();
+    setRateLimitStatus(status);
+    return status;
+  }, []);
 
   // Tracking state for obligations & SIPs
   const [snoozedObligationIds, setSnoozedObligationIds] = useState<Record<string, boolean>>({});
@@ -633,6 +645,12 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const triggerGoogleSheetsSync = async (): Promise<SyncResult> => {
+    const currentStatus = GoogleSheetsSyncEngine.getRateLimitStatus();
+    if (!currentStatus.allowed) {
+      const waitSec = currentStatus.retryAfterSeconds || Math.ceil(currentStatus.remainingCooldownMs / 1000);
+      throw new Error(currentStatus.reason || `Rate limit active: Please wait ${waitSec}s before syncing again.`);
+    }
+
     try {
       setIsSyncing(true);
       const payload = GoogleSheetsSyncEngine.buildBatchPayload(
@@ -648,9 +666,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         lastSyncTimestamp: result.timestamp,
       }));
       setLastSyncResult(result);
+      setRateLimitStatus(GoogleSheetsSyncEngine.getRateLimitStatus());
       return result;
     } finally {
       setIsSyncing(false);
+      setRateLimitStatus(GoogleSheetsSyncEngine.getRateLimitStatus());
     }
   };
 
@@ -762,6 +782,8 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isSyncing,
         lastSyncResult,
         pendingChangesCount,
+        rateLimitStatus,
+        refreshRateLimitStatus,
         initializeUserVault,
       }}
     >

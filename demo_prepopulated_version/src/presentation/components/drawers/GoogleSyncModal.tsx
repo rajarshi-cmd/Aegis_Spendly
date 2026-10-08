@@ -51,6 +51,8 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
     lastSyncResult,
     pendingChangesCount,
     transactions,
+    rateLimitStatus,
+    refreshRateLimitStatus,
   } = useFinanceData();
 
   const { width } = useWindowDimensions();
@@ -66,6 +68,27 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
   const [showPinForGoogleAccount, setShowPinForGoogleAccount] = useState(false);
   const [showEditAccountModal, setShowEditAccountModal] = useState(false);
   const [newGoogleEmail, setNewGoogleEmail] = useState(syncConfig.googleEmail || '');
+  const [remainingSec, setRemainingSec] = useState<number>(() => {
+    return rateLimitStatus.allowed ? 0 : (rateLimitStatus.retryAfterSeconds || Math.ceil(rateLimitStatus.remainingCooldownMs / 1000));
+  });
+
+  React.useEffect(() => {
+    if (!visible) return;
+    const current = refreshRateLimitStatus();
+    const initialSec = current.allowed ? 0 : (current.retryAfterSeconds || Math.ceil(current.remainingCooldownMs / 1000));
+    setRemainingSec(initialSec);
+
+    const interval = setInterval(() => {
+      const status = refreshRateLimitStatus();
+      if (status.allowed) {
+        setRemainingSec(0);
+      } else {
+        setRemainingSec(status.retryAfterSeconds || Math.ceil(status.remainingCooldownMs / 1000));
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [visible, refreshRateLimitStatus]);
 
   // Compute next scheduled sync
   const nextSyncDate = useMemo(() => {
@@ -117,6 +140,12 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
   };
 
   const handleManualSyncNow = async () => {
+    if (!rateLimitStatus.allowed || remainingSec > 0) {
+      setSyncToast(`Rate limited: ${rateLimitStatus.reason || `Please wait ${remainingSec}s.`}`);
+      setTimeout(() => setSyncToast(null), 3500);
+      return;
+    }
+
     try {
       const result = await triggerGoogleSheetsSync();
       if (result.success) {
@@ -125,7 +154,7 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
       }
     } catch (e: any) {
       setSyncToast('Sync error: ' + (e?.message || 'Failed to sync'));
-      setTimeout(() => setSyncToast(null), 3000);
+      setTimeout(() => setSyncToast(null), 3500);
     }
   };
 
@@ -221,6 +250,37 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
               <Text style={[styles.rateLimitNote, { color: colors.textMuted }]}>
                 💡 <Text style={{ fontWeight: '700' }}>Zero 3rd-Party Database Server:</Text> Data is stored on-device in SQLite and pushed straight to your private Google Drive folder above. No external databases, full privacy.
               </Text>
+
+              {/* Zero-Cost Rate Protection Shield */}
+              <View style={[styles.sheetLinkRow, { backgroundColor: '#F8FAFC', borderColor: rateLimitStatus.allowed ? '#CBD5E1' : '#FCD34D', marginTop: 10, padding: 12, flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="shield-checkmark" size={15} color="#0284C7" />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A', letterSpacing: 0.5 }}>
+                      ZERO-COST RATE LIMIT SHIELD
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: rateLimitStatus.allowed ? '#DCFCE7' : '#FEF3C7' }]}>
+                    <Text style={[styles.statusBadgeText, { color: rateLimitStatus.allowed ? '#15803D' : '#B45309' }]}>
+                      {rateLimitStatus.allowed ? 'Ready' : `Cooldown (${remainingSec}s)`}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6, lineHeight: 15 }}>
+                  Direct device-to-Google transfer ensures $0.00 developer cloud cost. Rate limits are locked (max 6 syncs/hr, 60s cooldown) to protect your free Google Cloud quotas and prevent battery/data abuse.
+                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
+                    ⏱ Cooldown: <Text style={{ color: '#0284C7' }}>60s min</Text>
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
+                    📊 Hourly Usage: <Text style={{ color: '#0284C7' }}>{rateLimitStatus.executionsInLastHour}/6</Text>
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
+                    🔒 Cost: <Text style={{ color: '#16A34A', fontWeight: '800' }}>$0.00 (BYOC)</Text>
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Sync Frequency / Cadence Selection */}
@@ -435,19 +495,25 @@ export const GoogleSyncModal: React.FC<GoogleSyncModalProps> = ({ visible, onClo
             <TouchableOpacity
               style={[
                 styles.syncNowBtn,
-                { backgroundColor: isSyncing ? colors.textMuted : colors.primary },
+                { backgroundColor: isSyncing || !rateLimitStatus.allowed || remainingSec > 0 ? '#94A3B8' : colors.primary },
               ]}
               onPress={handleManualSyncNow}
-              disabled={isSyncing}
+              disabled={isSyncing || !rateLimitStatus.allowed || remainingSec > 0}
             >
               {isSyncing ? (
                 <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              ) : !rateLimitStatus.allowed || remainingSec > 0 ? (
+                <Ionicons name="time-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
               ) : (
                 <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
               )}
               <Text style={styles.syncNowBtnText}>
                 {isSyncing
                   ? 'Batch Syncing to Sheets...'
+                  : !rateLimitStatus.allowed || remainingSec > 0
+                  ? remainingSec > 0
+                    ? `Cooldown Active (${remainingSec}s)`
+                    : 'Hourly Limit Reached (6/6)'
                   : pendingChangesCount > 0
                   ? `Sync Now (${pendingChangesCount} pending updates)`
                   : 'Sync Now (All Up-To-Date)'}

@@ -6,9 +6,11 @@ import {
   SyncScheduleConfig,
   SyncBatchPayload,
   SyncResult,
+  RateLimitCheckResult,
   DayOfWeek,
 } from '../types/sync';
 import { safeFormatDate } from '../utils/date';
+import { RateLimiter } from '../security/rateLimiter';
 
 const DAY_MAP: Record<DayOfWeek, number> = {
   SUNDAY: 0,
@@ -228,11 +230,27 @@ export class GoogleSheetsSyncEngine {
   }
 
   /**
+   * Assesses the current rate limiting status against immutable policies.
+   */
+  public static getRateLimitStatus(): RateLimitCheckResult {
+    return RateLimiter.checkRateLimit();
+  }
+
+  /**
+   * Asserts whether a sync operation is permitted. Throws RateLimitViolationError if restricted.
+   */
+  public static assertCanSync(payloadSizeBytes?: number, transactionCount?: number): void {
+    RateLimiter.assertAllowed(payloadSizeBytes, transactionCount);
+  }
+
+  /**
    * Executes the batch sync payload and returns detailed creation statistics.
+   * Enforces immutable cryptographic rate limits and batch payload size checks.
    */
   public static async executeBatchSync(
     payload: SyncBatchPayload,
-    config: SyncScheduleConfig
+    config: SyncScheduleConfig,
+    options?: { skipRateLimitForTest?: boolean }
   ): Promise<SyncResult> {
     const timestamp = new Date().toISOString();
     const monthKeys = Object.keys(payload.monthlySheets);
@@ -240,6 +258,15 @@ export class GoogleSheetsSyncEngine {
       (sum, s) => sum + s.transactions.length,
       0
     );
+
+    const serializedPayload = JSON.stringify(payload);
+    const payloadBytes = serializedPayload.length;
+
+    // Strict immutable rate limiting gate
+    if (!options?.skipRateLimitForTest) {
+      RateLimiter.assertAllowed(payloadBytes, totalTxRows);
+      RateLimiter.recordExecution(payloadBytes, totalTxRows);
+    }
 
     // Standard base tabs + monthly tabs
     const createdTabs = [
@@ -262,6 +289,7 @@ export class GoogleSheetsSyncEngine {
       updatedTabs: createdTabs,
       spreadsheetUrl,
       driveFolderName: config.driveFolderName || 'Aegis Spendly',
+      rateLimitStatus: RateLimiter.checkRateLimit(),
     };
   }
 }

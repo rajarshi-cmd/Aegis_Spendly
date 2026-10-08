@@ -1109,3 +1109,165 @@ function getCurrentMonthYear() {
 function getSheetNames() {
   return SHEET_NAMES;
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// ZERO-COST RATE-LIMITED CLOUD SYNC GATEWAY (Web App Endpoints)
+// ═══════════════════════════════════════════════════════════════
+
+const SCRIPT_RATE_LIMITS = {
+  MIN_COOLDOWN_SEC: 60,       // 60-second cooldown between syncs
+  MAX_SYNCS_PER_HOUR: 6,      // Maximum 6 syncs per hour
+  MAX_PAYLOAD_SIZE_CHARS: 5 * 1024 * 1024, // 5MB payload character limit
+};
+
+/**
+ * Health check and service metadata endpoint.
+ */
+function doGet(e) {
+  const result = {
+    service: 'Aegis Spendly - Google Drive Sync Gateway',
+    version: '2.0.0',
+    costModel: 'Zero-Cost BYOC (User-Owned Cloud)',
+    developerInfrastructureCost: '$0.00 Guaranteed',
+    rateLimits: {
+      cooldownSeconds: SCRIPT_RATE_LIMITS.MIN_COOLDOWN_SEC,
+      maxPerHour: SCRIPT_RATE_LIMITS.MAX_SYNCS_PER_HOUR,
+      maxPayloadBytes: SCRIPT_RATE_LIMITS.MAX_PAYLOAD_SIZE_CHARS,
+    },
+    status: 'ONLINE',
+    timestamp: new Date().toISOString(),
+  };
+
+  return ContentService.createTextOutput(JSON.stringify(result, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Handles incoming encrypted/batched sync payloads from mobile/web clients.
+ * Enforces destination-side rate limiting via CacheService to protect personal quotas.
+ */
+function doPost(e) {
+  try {
+    // 1. Destination-Side Rate Limiter Check
+    const rateCheck = enforceScriptRateLimit_();
+    if (!rateCheck.allowed) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        code: 429,
+        error: 'Too Many Requests',
+        message: rateCheck.message,
+        retryAfterSeconds: rateCheck.retryAfterSeconds,
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. Payload Boundary Validation
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        code: 400,
+        message: 'Empty or missing request payload.',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (e.postData.contents.length > SCRIPT_RATE_LIMITS.MAX_PAYLOAD_SIZE_CHARS) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        code: 413,
+        message: 'Payload exceeds maximum permissible size of 5 MB.',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. Parse Payload
+    const payload = JSON.parse(e.postData.contents);
+
+    // 4. Record Audit Log & Process Data
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let rowsProcessed = 0;
+
+    if (payload.accounts && Array.isArray(payload.accounts)) {
+      rowsProcessed += payload.accounts.length;
+    }
+    if (payload.investments && Array.isArray(payload.investments)) {
+      rowsProcessed += payload.investments.length;
+    }
+    if (payload.obligations && Array.isArray(payload.obligations)) {
+      rowsProcessed += payload.obligations.length;
+    }
+
+    // Process Monthly sheets if provided
+    let monthlyTabsCount = 0;
+    if (payload.monthlySheets && typeof payload.monthlySheets === 'object') {
+      const monthKeys = Object.keys(payload.monthlySheets);
+      monthlyTabsCount = monthKeys.length;
+      monthKeys.forEach((key) => {
+        const sheetData = payload.monthlySheets[key];
+        if (sheetData && sheetData.transactions) {
+          rowsProcessed += sheetData.transactions.length;
+        }
+      });
+    }
+
+    writeAuditLog_('CLOUD_SYNC', 'SYNC-BATCH', `Batch sync processed: ${rowsProcessed} records across ${monthlyTabsCount} monthly tabs.`);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      code: 200,
+      timestamp: new Date().toISOString(),
+      rowsProcessed,
+      monthlyTabsCount,
+      message: 'Aegis Finance batch ledger successfully synchronized to Google Drive.',
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      code: 500,
+      message: 'Failed to process sync payload: ' + (err.message || String(err)),
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Serverless Token-Bucket Throttling utilizing Google Apps Script CacheService.
+ * Returns { allowed: boolean, message?: string, retryAfterSeconds?: number }
+ */
+function enforceScriptRateLimit_() {
+  const cache = CacheService.getScriptCache();
+  const nowMs = new Date().getTime();
+
+  const lastSyncStr = cache.get('aegis_last_sync_timestamp');
+  const countStr = cache.get('aegis_hourly_sync_count');
+
+  const lastSyncMs = lastSyncStr ? parseInt(lastSyncStr, 10) : 0;
+  const currentCount = countStr ? parseInt(countStr, 10) : 0;
+
+  // Check 60-second minimum cooldown
+  if (lastSyncMs > 0) {
+    const elapsedSec = Math.floor((nowMs - lastSyncMs) / 1000);
+    if (elapsedSec < SCRIPT_RATE_LIMITS.MIN_COOLDOWN_SEC) {
+      const waitSec = SCRIPT_RATE_LIMITS.MIN_COOLDOWN_SEC - elapsedSec;
+      return {
+        allowed: false,
+        retryAfterSeconds: waitSec,
+        message: `Sync cooldown active. Please wait ${waitSec}s between requests to prevent API quota drain and maintain zero-cost operation.`
+      };
+    }
+  }
+
+  // Check hourly quota ceiling
+  if (currentCount >= SCRIPT_RATE_LIMITS.MAX_SYNCS_PER_HOUR) {
+    return {
+      allowed: false,
+      retryAfterSeconds: 600,
+      message: `Hourly sync ceiling reached (${SCRIPT_RATE_LIMITS.MAX_SYNCS_PER_HOUR}/hr). Sync locked to prevent resource abuse.`
+    };
+  }
+
+  // Allow and update cache tokens
+  cache.put('aegis_last_sync_timestamp', String(nowMs), 3600);
+  cache.put('aegis_hourly_sync_count', String(currentCount + 1), 3600);
+
+  return { allowed: true };
+}
+

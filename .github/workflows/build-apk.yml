@@ -48,14 +48,25 @@ jobs:
         run: |
           ./gradlew assembleRelease --no-daemon
 
-      - name: ✍️ Sign APK with Consistent Keystore
+      - name: ✍️ Zipalign & Sign APK with Scheme v2 / v3
         working-directory: app
         run: |
-          APK_SRC=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "Found compiled APK: $APK_SRC"
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore spendly-release.keystore -storepass spendlypass123 -keypass spendlypass123 "$APK_SRC" spendly
-          cp "$APK_SRC" spendly-release.apk
-          echo "Release APK prepared at app/spendly-release.apk"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          echo "Using Android Build Tools: $BUILD_TOOLS_DIR"
+          RAW_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          echo "Found compiled APK: $RAW_APK"
+          
+          "$BUILD_TOOLS_DIR/zipalign" -p -f 4 "$RAW_APK" spendly-aligned.apk
+          "$BUILD_TOOLS_DIR/apksigner" sign \
+            --ks spendly-release.keystore \
+            --ks-pass pass:spendlypass123 \
+            --ks-key-alias spendly \
+            --key-pass pass:spendlypass123 \
+            --out spendly-release.apk \
+            spendly-aligned.apk
+            
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose spendly-release.apk
+          echo "Release APK successfully signed and verified with Scheme v2/v3!"
 
       - name: 🏷️ Determine Release Tag
         id: vars

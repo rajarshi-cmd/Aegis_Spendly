@@ -1,5 +1,6 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeEach } from '@jest/globals';
 import { GoogleSheetsSyncEngine } from '../src/core/engines/googleSheetsEngine';
+import { RateLimiter } from '../src/core/security/rateLimiter';
 import { Account } from '../src/core/types/accounts';
 import { Transaction } from '../src/core/types/transactions';
 import { InvestmentAsset } from '../src/core/types/investments';
@@ -7,6 +8,9 @@ import { RecurringObligation } from '../src/core/types/upcoming';
 import { DEFAULT_SYNC_CONFIG, SyncScheduleConfig } from '../src/core/types/sync';
 
 describe('GoogleSheetsSyncEngine: Schedule Calculation, Year-Month Tabs, and Batching', () => {
+  beforeEach(() => {
+    RateLimiter.resetForTesting();
+  });
   const mockAccounts: Account[] = [
     {
       id: 'acc-1',

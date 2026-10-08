@@ -86,6 +86,19 @@ export interface SyncBatchPayload {
   >;
 }
 
+export interface RateLimitCheckResult {
+  allowed: boolean;
+  remainingCooldownMs: number;
+  executionsInLastHour: number;
+  maxPerHour: number;
+  executionsInLastDay: number;
+  maxPerDay: number;
+  penaltyActive: boolean;
+  reason?: string;
+  retryAfterSeconds?: number;
+  nextAllowedTimestamp?: string;
+}
+
 export interface SyncResult {
   success: boolean;
   timestamp: string;
@@ -94,6 +107,7 @@ export interface SyncResult {
   updatedTabs: string[];
   spreadsheetUrl: string;
   driveFolderName?: string;
+  rateLimitStatus?: RateLimitCheckResult;
   error?: string;
 }
 

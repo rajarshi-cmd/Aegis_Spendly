@@ -380,7 +380,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
               <View style={styles.updateRow}>
                 <View>
                   <Text style={[styles.updateTitle, { color: colors.textPrimary }]}>Spendly Mobile</Text>
-                  <Text style={[styles.updateVersion, { color: colors.textMuted }]}>Version 1.0.0 (Build 1)</Text>
+                  <Text style={[styles.updateVersion, { color: colors.textMuted }]}>Version 1.0.1 (Build 2)</Text>
                 </View>
                 <View style={[styles.updateTag, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
                   <Text style={[styles.updateTagText, { color: colors.primary }]}>LATEST</Text>
