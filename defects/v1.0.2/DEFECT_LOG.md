@@ -193,7 +193,7 @@ When the user switches the header month selector away from the month in which tr
 
 #### 🎯 Expected vs. Actual Behavior
 * **Expected:**
-  1. The sidebar badge should match the filtered month's active transaction count (or display `0` when August is selected).
+  1. Remove the transaction count badge from the sidebar completely to keep navigation minimal, clean, and free of period-filtering confusion.
   2. `OverviewScreen`'s 'Recent transactions' list must strictly honor `activeMonth` filtering so it doesn't show October transactions when August is selected.
   3. Clearly indicate in the empty state when transactions exist in other months, with a 1-tap shortcut to "Jump to Current Month (October 2026)".
   4. Segregate opening balances from regular monthly transactions.
