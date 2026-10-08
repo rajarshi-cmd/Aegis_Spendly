@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+app/node_modules/
+finance-tracker/node_modules/
+
+# Expo & Build artifacts
+.expo/
+app/.expo/
+dist/
+app/dist/
+web-build/
+app/web-build/
+expo-env.d.ts
+app/expo-env.d.ts
+
+# Large archives and temporary archives
+*.zip
+*.tar.gz
+*.7z
+
+# Logs & Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# OS & Environment
+.DS_Store
+Thumbs.db
+.env*.local
+.env
+*.pem
+*.tsbuildinfo
+
+# Native generated folders
+ios/
+android/
+app/ios/
+app/android/

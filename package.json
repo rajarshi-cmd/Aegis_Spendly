@@ -1,0 +1,12 @@
+{
+  "name": "aegis-finance-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix app start",
+    "test": "npm --prefix app test",
+    "typecheck": "npm --prefix app run typecheck",
+    "android": "npm --prefix app run android",
+    "ios": "npm --prefix app run ios"
+  }
+}

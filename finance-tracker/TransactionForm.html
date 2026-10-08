@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* ── Reset & Base ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a2e;
+      font-size: 14px;
+      padding: 0;
+    }
+
+    /* ── Tab Navigation ── */
+    .tab-bar {
+      display: flex;
+      background: #1a1a2e;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 14px 8px;
+      border: none;
+      background: transparent;
+      color: #8a8aa0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: #4ecca3;
+    }
+
+    .tab-btn:hover:not(.active) { color: #ccc; }
+
+    .tab-btn.income.active { border-bottom-color: #4ecca3; }
+    .tab-btn.expense.active { border-bottom-color: #e74c3c; }
+
+    /* ── Form Container ── */
+    .form-container {
+      padding: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .required::after {
+      content: ' *';
+      color: #e74c3c;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #4ecca3;
+      box-shadow: 0 0 0 3px rgba(78, 204, 163, 0.1);
+    }
+
+    input.error, select.error {
+      border-color: #e74c3c;
+      box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+    }
+
+    textarea { resize: vertical; min-height: 60px; }
+
+    .amount-input {
+      font-size: 20px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+
+    .amount-input.income-mode { color: #2e7d32; }
+    .amount-input.expense-mode { color: #c62828; }
+
+    /* ── Two Column Row ── */
+    .row-2 {
+      display: flex;
+      gap: 10px;
+    }
+
+    .row-2 .form-group { flex: 1; }
+
+    /* ── Tags ── */
+    .tag-input-wrap {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tag-input-wrap input { flex: 1; }
+
+    .tag-input-wrap button {
+      padding: 8px 14px;
+      background: #eee;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .tags-display {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .tag-chip {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tag-chip .remove {
+      cursor: pointer;
+      font-weight: bold;
+      opacity: 0.6;
+    }
+
+    .tag-chip .remove:hover { opacity: 1; }
+
+    /* ── Buttons ── */
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 8px;
+    }
+
+    .btn-submit.income { background: #2e7d32; }
+    .btn-submit.income:hover { background: #1b5e20; }
+    .btn-submit.expense { background: #c62828; }
+    .btn-submit.expense:hover { background: #b71c1c; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Feedback ── */
+    .feedback {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: 12px 0;
+      font-size: 13px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .feedback.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+      display: block;
+    }
+
+    .feedback.error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+      display: block;
+    }
+
+    /* ── Recent Transactions ── */
+    .recent-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+
+    .recent-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .txn-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      background: #fff;
+      border: 1px solid #f0f0f0;
+    }
+
+    .txn-item .left { flex: 1; }
+    .txn-item .cat { font-weight: 600; font-size: 13px; }
+    .txn-item .meta { font-size: 11px; color: #999; }
+    .txn-item .amt { font-weight: 700; font-size: 14px; }
+    .txn-item .amt.inc { color: #2e7d32; }
+    .txn-item .amt.exp { color: #c62828; }
+
+    /* ── Loading ── */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: auto;
+    }
+
+    .checkbox-row label {
+      margin: 0;
+      text-transform: none;
+      font-size: 13px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="tab-bar">
+    <button class="tab-btn income active" onclick="switchTab('Income')">💰 Income</button>
+    <button class="tab-btn expense" onclick="switchTab('Expense')">💸 Expense</button>
+  </div>
+
+  <div class="form-container">
+    <div id="feedback" class="feedback"></div>
+
+    <!-- Amount (prominent) -->
+    <div class="form-group">
+      <label class="required">Amount</label>
+      <input type="number" id="amount" class="amount-input income-mode"
+             placeholder="0.00" step="0.01" min="0.01" required>
+    </div>
+
+    <div class="row-2">
+      <div class="form-group">
+        <label class="required">Date</label>
+        <input type="date" id="txnDate" required>
+      </div>
+      <div class="form-group">
+        <label class="required">Category</label>
+        <select id="category" required>
+          <option value="">Select…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label id="sourcePayeeLabel">Source / Received From</label>
+      <input type="text" id="sourcePayee" placeholder="e.g. Employer, Client…" list="sourcePayeeList">
+      <datalist id="sourcePayeeList"></datalist>
+    </div>
+
+    <div class="row-2">
+      <div class="form-group">
+        <label class="required">Payment Mode</label>
+        <select id="paymentMode" required>
+          <option value="">Select…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="required">Account</label>
+        <select id="account" required>
+          <option value="">Select…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Tags</label>
+      <div class="tag-input-wrap">
+        <input type="text" id="tagInput" placeholder="Add a tag…"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addTag();}">
+        <button onclick="addTag()">+</button>
+      </div>
+      <div class="tags-display" id="tagsDisplay"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Project</label>
+      <input type="text" id="project" placeholder="Optional project name">
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="recurring">
+      <label for="recurring">Recurring transaction</label>
+    </div>
+
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="notes" placeholder="Any additional details…"></textarea>
+    </div>
+
+    <button class="btn-submit income" id="submitBtn" onclick="submitForm()">
+      Record Income
+    </button>
+
+    <!-- Recent Transactions -->
+    <div class="recent-section" id="recentSection">
+      <div class="recent-title">Recent Transactions</div>
+      <div id="recentList">Loading…</div>
+    </div>
+  </div>
+
+  <script>
+    let currentType = 'Income';
+    let masterData = {};
+    let tags = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      setTodayDate();
+      loadMasterData();
+      loadRecentTransactions();
+    });
+
+    function setTodayDate() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('txnDate').value = today;
+    }
+
+    function switchTab(type) {
+      currentType = type;
+      const amountInput = document.getElementById('amount');
+      const submitBtn = document.getElementById('submitBtn');
+
+      // Update tab styles
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`.tab-btn.${type.toLowerCase()}`).classList.add('active');
+
+      // Update amount color
+      amountInput.className = 'amount-input ' + (type === 'Income' ? 'income-mode' : 'expense-mode');
+
+      // Update submit button
+      submitBtn.className = 'btn-submit ' + type.toLowerCase();
+      submitBtn.textContent = 'Record ' + type;
+
+      // Update category dropdown
+      populateCategories();
+
+      // Update source/payee label
+      const label = document.getElementById('sourcePayeeLabel');
+      const input = document.getElementById('sourcePayee');
+      if (type === 'Income') {
+        label.textContent = 'Source / Received From';
+        input.placeholder = 'e.g. Employer, Client…';
+        populateDatalist('sourcePayeeList', masterData.incomeSources || []);
+      } else {
+        label.textContent = 'Paid To';
+        input.placeholder = 'e.g. Amazon, Landlord…';
+        populateDatalist('sourcePayeeList', masterData.vendors || []);
+      }
+
+      clearFeedback();
+    }
+
+    function loadMasterData() {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          masterData = data;
+          populateCategories();
+          populateSelect('paymentMode', data.paymentModes);
+          populateSelect('account', data.accounts);
+          populateDatalist('sourcePayeeList', data.incomeSources || []);
+        })
+        .withFailureHandler(function(err) {
+          showFeedback('Failed to load data. Run Setup from the menu first.', 'error');
+        })
+        .getAllMasterData();
+    }
+
+    function populateCategories() {
+      const cats = currentType === 'Income'
+        ? (masterData.incomeCategories || [])
+        : (masterData.expenseCategories || []);
+      populateSelect('category', cats);
+    }
+
+    function populateSelect(id, items) {
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Select…</option>';
+      items.forEach(function(item) {
+        const opt = document.createElement('option');
+        opt.value = item;
+        opt.textContent = item;
+        sel.appendChild(opt);
+      });
+      if (current && items.includes(current)) sel.value = current;
+    }
+
+    function populateDatalist(id, items) {
+      const dl = document.getElementById(id);
+      dl.innerHTML = '';
+      items.forEach(function(item) {
+        const opt = document.createElement('option');
+        opt.value = item;
+        dl.appendChild(opt);
+      });
+    }
+
+    // Tags
+    function addTag() {
+      const input = document.getElementById('tagInput');
+      const val = input.value.trim();
+      if (val && !tags.includes(val)) {
+        tags.push(val);
+        renderTags();
+      }
+      input.value = '';
+    }
+
+    function removeTag(tag) {
+      tags = tags.filter(t => t !== tag);
+      renderTags();
+    }
+
+    function renderTags() {
+      const container = document.getElementById('tagsDisplay');
+      container.innerHTML = tags.map(t =>
+        `<span class="tag-chip">${t} <span class="remove" onclick="removeTag('${t}')">✕</span></span>`
+      ).join('');
+    }
+
+    // Validation
+    function validate() {
+      let valid = true;
+      ['amount', 'category', 'paymentMode', 'account'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el.value) {
+          el.classList.add('error');
+          valid = false;
+        } else {
+          el.classList.remove('error');
+        }
+      });
+      return valid;
+    }
+
+    // Submit
+    function submitForm() {
+      if (!validate()) {
+        showFeedback('Please fill all required fields.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Recording…';
+
+      const formData = {
+        type: currentType,
+        date: document.getElementById('txnDate').value,
+        amount: document.getElementById('amount').value,
+        category: document.getElementById('category').value,
+        sourcePayee: document.getElementById('sourcePayee').value,
+        paymentMode: document.getElementById('paymentMode').value,
+        account: document.getElementById('account').value,
+        notes: document.getElementById('notes').value,
+        tags: tags.join(', '),
+        project: document.getElementById('project').value,
+        recurring: document.getElementById('recurring').checked ? 'Yes' : 'No'
+      };
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.textContent = 'Record ' + currentType;
+
+          if (result.success) {
+            showFeedback(result.message, 'success');
+            resetForm();
+            loadRecentTransactions();
+          } else {
+            showFeedback(result.message, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.textContent = 'Record ' + currentType;
+          showFeedback('❌ Server error: ' + err.message, 'error');
+        })
+        .submitTransaction(formData);
+    }
+
+    function resetForm() {
+      document.getElementById('amount').value = '';
+      document.getElementById('sourcePayee').value = '';
+      document.getElementById('notes').value = '';
+      document.getElementById('project').value = '';
+      document.getElementById('recurring').checked = false;
+      tags = [];
+      renderTags();
+      setTodayDate();
+    }
+
+    function showFeedback(msg, type) {
+      const el = document.getElementById('feedback');
+      el.textContent = msg;
+      el.className = 'feedback ' + type;
+      if (type === 'success') {
+        setTimeout(() => { el.className = 'feedback'; }, 5000);
+      }
+    }
+
+    function clearFeedback() {
+      document.getElementById('feedback').className = 'feedback';
+    }
+
+    // Recent transactions
+    function loadRecentTransactions() {
+      google.script.run
+        .withSuccessHandler(function(txns) {
+          const container = document.getElementById('recentList');
+          if (!txns || txns.length === 0) {
+            container.innerHTML = '<div style="color:#aaa;font-size:12px;">No transactions yet.</div>';
+            return;
+          }
+          container.innerHTML = txns.slice(0, 8).map(t => {
+            const isInc = t.type === 'Income';
+            return `<div class="txn-item">
+              <div class="left">
+                <div class="cat">${t.category}</div>
+                <div class="meta">${t.date} · ${t.account}</div>
+              </div>
+              <div class="amt ${isInc ? 'inc' : 'exp'}">${isInc ? '+' : '-'}${parseFloat(t.amount).toFixed(2)}</div>
+            </div>`;
+          }).join('');
+        })
+        .withFailureHandler(function() {
+          document.getElementById('recentList').innerHTML = '';
+        })
+        .getRecentTransactions(8);
+    }
+  </script>
+</body>
+</html>

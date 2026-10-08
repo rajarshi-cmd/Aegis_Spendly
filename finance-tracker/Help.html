@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa; color: #1a1a2e; font-size: 14px; line-height: 1.6;
+    }
+    .header {
+      background: #1a1a2e; color: #e0e0e0; padding: 16px;
+      text-align: center; font-size: 15px; font-weight: 700;
+    }
+    .content { padding: 16px; }
+    h2 {
+      font-size: 14px; font-weight: 700; color: #1a1a2e;
+      margin: 18px 0 8px; padding-bottom: 4px;
+      border-bottom: 2px solid #4ecca3;
+    }
+    h2:first-child { margin-top: 0; }
+    p { margin-bottom: 10px; color: #444; font-size: 13px; }
+    .shortcut {
+      background: #fff; border: 1px solid #eee; border-radius: 8px;
+      padding: 10px 14px; margin-bottom: 6px;
+    }
+    .shortcut strong { color: #1a1a2e; }
+    .shortcut span { color: #888; font-size: 12px; }
+    code {
+      background: #eee; padding: 2px 6px; border-radius: 4px;
+      font-size: 12px;
+    }
+    .tip {
+      background: #fff8e1; border-left: 3px solid #f9a825;
+      padding: 10px 14px; border-radius: 0 8px 8px 0;
+      margin: 12px 0; font-size: 12px;
+    }
+    ul { margin: 6px 0 12px 20px; }
+    li { margin-bottom: 4px; font-size: 13px; color: #444; }
+  </style>
+</head>
+<body>
+  <div class="header">❓ Help & Documentation</div>
+  <div class="content">
+
+    <h2>Getting Started</h2>
+    <p>Use the <strong>💰 Finance Tracker</strong> menu at the top of your spreadsheet to access all features.</p>
+
+    <div class="shortcut">
+      <strong>🏗️ Initialize All Sheets</strong><br>
+      <span>Run this once to create all required sheets and default master data.</span>
+    </div>
+
+    <h2>Adding Transactions</h2>
+    <p>Click <strong>➕ New Transaction</strong> to open the sidebar form. Switch between Income and Expense tabs. All fields with * are required.</p>
+    <ul>
+      <li>Transactions get a unique auto-generated ID</li>
+      <li>Running balance updates automatically</li>
+      <li>Recent transactions appear at the bottom of the form</li>
+    </ul>
+
+    <h2>Transfers</h2>
+    <p>Use <strong>🔄 Transfer Between Accounts</strong> to move money between accounts. This creates two ledger entries (debit + credit) to keep balances accurate.</p>
+
+    <h2>Master Data</h2>
+    <p>Manage categories, payment modes, accounts, and vendors through <strong>⚙️ Setup → Manage Master Data</strong>. Changes reflect in form dropdowns immediately.</p>
+
+    <div class="tip">
+      💡 To deactivate an item without deleting it, go to the master sheet directly and change "Yes" to "No" in the Active column.
+    </div>
+
+    <h2>Budgets</h2>
+    <p>Set monthly spending limits by category via <strong>⚙️ Setup → Set Monthly Budgets</strong>. Then generate a "Budget vs Actual" report to track how you're doing.</p>
+
+    <h2>Dashboard</h2>
+    <p>Click <strong>📊 Refresh Dashboard</strong> to update your financial dashboard with:</p>
+    <ul>
+      <li>Current balance, total income & expenses</li>
+      <li>This month's breakdown</li>
+      <li>Category-wise expense distribution (with pie chart)</li>
+      <li>Monthly trend (with bar chart)</li>
+      <li>Recent transactions</li>
+    </ul>
+
+    <h2>Reports</h2>
+    <p>Generate reports via <strong>📋 Generate Monthly Report</strong>:</p>
+    <ul>
+      <li><strong>Monthly Statement</strong> — full month summary + all transactions</li>
+      <li><strong>Yearly Statement</strong> — annual overview</li>
+      <li><strong>Category-wise</strong> — spending by category with percentages</li>
+      <li><strong>Cash Flow</strong> — 12-month income/expense/net/cumulative view</li>
+      <li><strong>Account-wise</strong> — per-account inflows, outflows, and net</li>
+      <li><strong>Budget vs Actual</strong> — compare planned vs actual spending</li>
+    </ul>
+
+    <h2>Sheets Overview</h2>
+    <div class="shortcut"><strong>Ledger</strong> — <span>All transactions in chronological order</span></div>
+    <div class="shortcut"><strong>Dashboard</strong> — <span>Visual summary and KPIs</span></div>
+    <div class="shortcut"><strong>Reports</strong> — <span>Generated reports land here</span></div>
+    <div class="shortcut"><strong>Budgets</strong> — <span>Monthly budget targets</span></div>
+    <div class="shortcut"><strong>Transfers</strong> — <span>Account-to-account transfers log</span></div>
+    <div class="shortcut"><strong>AuditLog</strong> — <span>Every action is tracked here</span></div>
+    <div class="shortcut"><strong>M_*</strong> — <span>Master data sheets (categories, accounts, etc.)</span></div>
+    <div class="shortcut"><strong>Settings</strong> — <span>Currency, date format, last TxnID</span></div>
+
+    <h2>Tips</h2>
+    <div class="tip">
+      💡 Use <strong>Tags</strong> and <strong>Projects</strong> on transactions to group spending across categories (e.g. tag a trip's food, hotel, and transport together).
+    </div>
+    <div class="tip">
+      💡 Mark transactions as <strong>Recurring</strong> to flag regular payments for future reference.
+    </div>
+    <div class="tip">
+      💡 To change your currency symbol, edit the Settings sheet: find the "Currency" row and change the value.
+    </div>
+
+    <h2>Architecture</h2>
+    <p>This system follows a modular design with separation between data entry (sidebar forms), storage (Ledger + master sheets), presentation (Dashboard), and analysis (Reports). The audit log tracks all actions for accountability.</p>
+
+  </div>
+</body>
+</html>
