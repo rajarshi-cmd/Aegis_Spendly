@@ -12,7 +12,15 @@ import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 
 export const LockScreen: React.FC = () => {
   const { colors } = useTheme();
-  const { user, unlockWithPin, signOut, failedPinAttempts, lockoutRemainingSeconds } = useAuthSecurity();
+  const {
+    user,
+    unlockWithPin,
+    signOut,
+    failedPinAttempts,
+    lockoutRemainingSeconds,
+    remainingAttemptsBeforeWipe,
+    config,
+  } = useAuthSecurity();
 
   const [pin, setPin] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -30,7 +38,16 @@ export const LockScreen: React.FC = () => {
       setIsVerifying(true);
       const success = await unlockWithPin(nextPin);
       if (!success) {
-        setErrorMessage('Incorrect PIN. Please try again.');
+        if (config.autoDeleteOnFailedPin && config.autoDeleteThreshold) {
+          const rem = Math.max(0, config.autoDeleteThreshold - (failedPinAttempts + 1));
+          if (rem <= 0) {
+            setErrorMessage('Vault deleted due to maximum wrong PIN attempts.');
+          } else {
+            setErrorMessage(`Incorrect PIN. Vault will be deleted after ${rem} more wrong input${rem === 1 ? '' : 's'}!`);
+          }
+        } else {
+          setErrorMessage('Incorrect PIN. Please try again.');
+        }
         setTimeout(() => {
           setPin('');
           setIsVerifying(false);
@@ -134,7 +151,11 @@ export const LockScreen: React.FC = () => {
             </Text>
           </View>
         ) : errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+          <Text style={[styles.errorText, { color: '#EF4444' }]}>{errorMessage}</Text>
+        ) : config.autoDeleteOnFailedPin && remainingAttemptsBeforeWipe !== null && failedPinAttempts > 0 ? (
+          <Text style={[styles.errorText, { color: '#DC2626', fontWeight: '700' }]}>
+            ⚠️ Vault will be deleted after {remainingAttemptsBeforeWipe} more wrong input{remainingAttemptsBeforeWipe === 1 ? '' : 's'}
+          </Text>
         ) : failedPinAttempts >= 3 ? (
           <Text style={[styles.errorText, { color: '#D97706' }]}>
             ⚠️ {Math.max(1, 5 - failedPinAttempts)} attempt(s) left before lockout

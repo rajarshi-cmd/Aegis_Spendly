@@ -303,11 +303,31 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     Hides numbers whenever browser tab loses focus
                   </Text>
                 </View>
-                <Ionicons
-                  name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
-                  size={30}
-                  color={autoLockOnBlur ? colors.primary : colors.textMuted}
-                />
+                <View
+                  style={{
+                    width: 46,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: autoLockOnBlur ? colors.primary : '#CBD5E1',
+                    padding: 2,
+                    justifyContent: 'center',
+                    alignItems: autoLockOnBlur ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: '#FFFFFF',
+                      elevation: 2,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 1.5,
+                    }}
+                  />
+                </View>
               </TouchableOpacity>
 
               {/* Inactivity Duration Pills */}

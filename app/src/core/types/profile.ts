@@ -29,17 +29,14 @@ export const DEFAULT_PROFILE: UserProfile = {
   driveFolderName: 'Aegis Spendly',
 };
 
+import { kvStorage } from '../storage/kvStorage';
+
 const PROFILE_STORAGE_KEY = 'aegis_user_profile_data';
-let memoryProfileStorage: string | null = null;
 
 export function saveUserProfile(profile: UserProfile): void {
   try {
     const data = JSON.stringify(profile);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(PROFILE_STORAGE_KEY, data);
-    } else {
-      memoryProfileStorage = data;
-    }
+    kvStorage.setItem(PROFILE_STORAGE_KEY, data);
   } catch (e) {
     console.warn('[UserProfile] Failed to persist user profile', e);
   }
@@ -47,12 +44,7 @@ export function saveUserProfile(profile: UserProfile): void {
 
 export function loadUserProfile(): UserProfile | null {
   try {
-    let data: string | null = null;
-    if (typeof localStorage !== 'undefined') {
-      data = localStorage.getItem(PROFILE_STORAGE_KEY);
-    } else {
-      data = memoryProfileStorage;
-    }
+    const data = kvStorage.getItem(PROFILE_STORAGE_KEY);
     if (data) {
       return JSON.parse(data) as UserProfile;
     }
@@ -64,10 +56,7 @@ export function loadUserProfile(): UserProfile | null {
 
 export function clearUserProfile(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(PROFILE_STORAGE_KEY);
-    }
-    memoryProfileStorage = null;
+    kvStorage.removeItem(PROFILE_STORAGE_KEY);
   } catch (e) {
     console.warn('[UserProfile] Failed to clear user profile', e);
   }

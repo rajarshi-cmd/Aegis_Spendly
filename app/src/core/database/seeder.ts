@@ -12,18 +12,16 @@ import {
 import { Transaction } from '../types/transactions';
 import { Debt, SettlementRecord } from '../types/debts';
 
+import { kvStorage } from '../storage/kvStorage';
+import { loadUserProfile } from '../types/profile';
+
 export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    if (window.localStorage.getItem('aegis_vault_initialized') === 'true') {
-      return false;
-    }
-    const profile = window.localStorage.getItem('aegis_user_profile');
-    if (profile) {
-      try {
-        const parsed = JSON.parse(profile);
-        if (parsed.isOnboarded) return false;
-      } catch {}
-    }
+  if (kvStorage.getItem('aegis_vault_initialized') === 'true') {
+    return false;
+  }
+  const profile = loadUserProfile();
+  if (profile && profile.isOnboarded) {
+    return false;
   }
 
   const existingAccounts = await getAllAccounts(db);

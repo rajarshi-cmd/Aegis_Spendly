@@ -1,3 +1,5 @@
+import { kvStorage } from '../storage/kvStorage';
+
 export type AuthStatus = 'UNAUTHENTICATED' | 'PIN_SETUP' | 'ONBOARDING' | 'LOCKED' | 'UNLOCKED';
 
 export interface AuthUser {
@@ -18,6 +20,8 @@ export interface AuthSecurityConfig {
   inactivityTimeoutMinutes: number; // 1, 5, 15, 30, or 0 (never)
   requirePinOnOpen: boolean;
   lockPreset: AutoLockPreset;
+  autoDeleteOnFailedPin?: boolean;
+  autoDeleteThreshold?: number; // 3 to 10
 }
 
 export const DEFAULT_AUTH_CONFIG: AuthSecurityConfig = {
@@ -25,19 +29,16 @@ export const DEFAULT_AUTH_CONFIG: AuthSecurityConfig = {
   inactivityTimeoutMinutes: 5,
   requirePinOnOpen: true,
   lockPreset: 'BALANCED',
+  autoDeleteOnFailedPin: false,
+  autoDeleteThreshold: 5,
 };
 
 const SECURITY_CONFIG_STORAGE_KEY = 'aegis_security_config_data';
-let memorySecurityConfigStorage: string | null = null;
 
 export function saveSecurityConfig(config: AuthSecurityConfig): void {
   try {
     const data = JSON.stringify(config);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SECURITY_CONFIG_STORAGE_KEY, data);
-    } else {
-      memorySecurityConfigStorage = data;
-    }
+    kvStorage.setItem(SECURITY_CONFIG_STORAGE_KEY, data);
   } catch (e) {
     console.warn('[AuthSecurity] Failed to save security config', e);
   }
@@ -45,14 +46,9 @@ export function saveSecurityConfig(config: AuthSecurityConfig): void {
 
 export function loadSecurityConfig(): AuthSecurityConfig | null {
   try {
-    let data: string | null = null;
-    if (typeof localStorage !== 'undefined') {
-      data = localStorage.getItem(SECURITY_CONFIG_STORAGE_KEY);
-    } else {
-      data = memorySecurityConfigStorage;
-    }
+    const data = kvStorage.getItem(SECURITY_CONFIG_STORAGE_KEY);
     if (data) {
-      return JSON.parse(data) as AuthSecurityConfig;
+      return { ...DEFAULT_AUTH_CONFIG, ...JSON.parse(data) };
     }
   } catch (e) {
     console.warn('[AuthSecurity] Failed to load security config', e);

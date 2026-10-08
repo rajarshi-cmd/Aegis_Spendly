@@ -23,6 +23,7 @@ import { PlanAheadDrawer, PlanAheadTab } from './src/presentation/components/dra
 import { ProfileDrawer } from './src/presentation/components/drawers/ProfileDrawer';
 import { SettingsDrawer } from './src/presentation/components/drawers/SettingsDrawer';
 import { GoogleSyncModal } from './src/presentation/components/drawers/GoogleSyncModal';
+import { MobileNavDrawer } from './src/presentation/components/drawers/MobileNavDrawer';
 import { EditAccountModal } from './src/features/accounts/forms/EditAccountModal';
 import { Account } from './src/core/types/accounts';
 import { AuthSecurityProvider, useAuthSecurity } from './src/presentation/hooks/useAuthSecurity';
@@ -42,6 +43,7 @@ const MainNavigator: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSecurityUnlockedForSettings, setIsSecurityUnlockedForSettings] = useState(false);
   const [isGoogleSyncOpen, setIsGoogleSyncOpen] = useState(false);
+  const [isSideNavOpen, setIsSideNavOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
   const insets = useSafeAreaInsets();
@@ -152,7 +154,17 @@ const MainNavigator: React.FC = () => {
   };
 
   return (
-    <View style={[styles.appRoot, { backgroundColor: colors.background, paddingTop: isDesktop ? 0 : insets.top }]}>
+    <View
+      style={[
+        styles.appRoot,
+        {
+          backgroundColor: colors.background,
+          paddingTop: isDesktop ? 0 : insets.top,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
       <StatusBar style={themeName === 'Night Ledger' ? 'light' : 'dark'} />
 
       {isDesktop ? (
@@ -198,6 +210,7 @@ const MainNavigator: React.FC = () => {
               setIsSettingsOpen(true);
             }}
             onOpenSync={() => setIsGoogleSyncOpen(true)}
+            onOpenSideMenu={() => setIsSideNavOpen(true)}
           />
 
           <View style={styles.screenArea}>{renderActiveScreen()}</View>
@@ -206,6 +219,8 @@ const MainNavigator: React.FC = () => {
             currentTab={activeTab}
             onSelectTab={setActiveTab}
             deletedCount={deletedTransactions.length}
+            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         </View>
       )}
@@ -278,6 +293,27 @@ const MainNavigator: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
       />
       <GoogleSyncModal visible={isGoogleSyncOpen} onClose={() => setIsGoogleSyncOpen(false)} />
+
+      <MobileNavDrawer
+        visible={isSideNavOpen}
+        onClose={() => setIsSideNavOpen(false)}
+        currentTab={activeTab}
+        onSelectTab={setActiveTab}
+        profile={userProfile}
+        deletedCount={deletedTransactions.length}
+        onOpenProfile={() => {
+          setIsSideNavOpen(false);
+          setIsProfileOpen(true);
+        }}
+        onOpenSettings={() => {
+          setIsSideNavOpen(false);
+          setIsSettingsOpen(true);
+        }}
+        onOpenSync={() => {
+          setIsSideNavOpen(false);
+          setIsGoogleSyncOpen(true);
+        }}
+      />
 
       {editingAccount && (
         <EditAccountModal

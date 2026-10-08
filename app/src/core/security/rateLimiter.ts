@@ -1,5 +1,6 @@
 import { fallbackSha256 } from './cryptoVault';
 import { RateLimitCheckResult } from '../types/sync';
+import { kvStorage } from '../storage/kvStorage';
 
 /**
  * IMMUTABLE RATE LIMITING ARCHITECTURAL CONSTANTS
@@ -77,11 +78,7 @@ export class RateLimiter {
   private static loadState(nowMs: number): StoredRateLimiterState {
     let raw: string | null = null;
     try {
-      if (typeof localStorage !== 'undefined') {
-        raw = localStorage.getItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY);
-      } else {
-        raw = memoryStateStorage;
-      }
+      raw = kvStorage.getItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY) || memoryStateStorage;
     } catch {
       raw = memoryStateStorage;
     }
@@ -178,11 +175,7 @@ export class RateLimiter {
     );
     const serialized = JSON.stringify(state);
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY, serialized);
-      } else {
-        memoryStateStorage = serialized;
-      }
+      kvStorage.setItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY, serialized);
     } catch {
       memoryStateStorage = serialized;
     }
@@ -352,9 +345,7 @@ export class RateLimiter {
    */
   public static resetForTesting(): void {
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY);
-      }
+      kvStorage.removeItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY);
     } catch {}
     memoryStateStorage = null;
   }
@@ -364,9 +355,7 @@ export class RateLimiter {
    */
   public static injectRawStateForTesting(raw: string): void {
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY, raw);
-      }
+      kvStorage.setItem(RATE_LIMIT_CONSTANTS.STORAGE_KEY, raw);
     } catch {}
     memoryStateStorage = raw;
   }

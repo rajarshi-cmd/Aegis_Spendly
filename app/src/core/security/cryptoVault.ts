@@ -128,7 +128,7 @@ export async function verifyPin(pin: string, salt: string, expectedHash: string)
   return constantTimeEqual(pbkdf2Computed, expectedHash);
 }
 
-let memoryStorage: Record<string, string> = {};
+import { kvStorage } from '../storage/kvStorage';
 
 /**
  * Persists authenticated user security metadata.
@@ -136,11 +136,7 @@ let memoryStorage: Record<string, string> = {};
 export function saveAuthSession(user: AuthUser): void {
   try {
     const data = JSON.stringify(user);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, data);
-    } else {
-      memoryStorage[STORAGE_KEY] = data;
-    }
+    kvStorage.setItem(STORAGE_KEY, data);
   } catch (e) {
     console.warn('[CryptoVault] Failed to save auth session to storage', e);
   }
@@ -151,12 +147,7 @@ export function saveAuthSession(user: AuthUser): void {
  */
 export function loadAuthSession(): AuthUser | null {
   try {
-    let data: string | null = null;
-    if (typeof localStorage !== 'undefined') {
-      data = localStorage.getItem(STORAGE_KEY);
-    } else {
-      data = memoryStorage[STORAGE_KEY] || null;
-    }
+    const data = kvStorage.getItem(STORAGE_KEY);
     if (data) {
       return JSON.parse(data) as AuthUser;
     }
@@ -171,10 +162,7 @@ export function loadAuthSession(): AuthUser | null {
  */
 export function clearAuthSession(): void {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-    delete memoryStorage[STORAGE_KEY];
+    kvStorage.removeItem(STORAGE_KEY);
   } catch (e) {
     console.warn('[CryptoVault] Failed to clear auth session', e);
   }

@@ -6,6 +6,7 @@ import {
   Modal,
   StyleSheet,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemePresetName, THEME_PRESETS } from '../../theme';
@@ -302,11 +303,31 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     Hides numbers whenever browser tab loses focus
                   </Text>
                 </View>
-                <Ionicons
-                  name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
-                  size={30}
-                  color={autoLockOnBlur ? colors.primary : colors.textMuted}
-                />
+                <View
+                  style={{
+                    width: 46,
+                    height: 26,
+                    borderRadius: 13,
+                    backgroundColor: autoLockOnBlur ? colors.primary : '#CBD5E1',
+                    padding: 2,
+                    justifyContent: 'center',
+                    alignItems: autoLockOnBlur ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: '#FFFFFF',
+                      elevation: 2,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 1.5,
+                    }}
+                  />
+                </View>
               </TouchableOpacity>
 
               {/* Inactivity Duration Pills */}
@@ -365,6 +386,48 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                   <View style={[styles.swatchBlock, { backgroundColor: s.color, borderColor: colors.border }]} />
                 </View>
               ))}
+            </View>
+
+            {/* 4. APP VERSION & UPDATES SECTION */}
+            <Text style={[styles.sectionHeading, { color: colors.textMuted, marginTop: 28 }]}>
+              APP VERSION & UPDATES
+            </Text>
+            <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
+              Direct install releases for physical Android devices.
+            </Text>
+
+            <View style={[styles.updateCard, { borderColor: colors.borderSubtle, backgroundColor: colors.background }]}>
+              <View style={styles.updateRow}>
+                <View>
+                  <Text style={[styles.updateTitle, { color: colors.textPrimary }]}>Spendly Mobile</Text>
+                  <Text style={[styles.updateVersion, { color: colors.textMuted }]}>Version 1.0.1 (Build 2)</Text>
+                </View>
+                <View style={[styles.updateTag, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+                  <Text style={[styles.updateTagText, { color: colors.primary }]}>LATEST</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.updateDesc, { color: colors.textSecondary }]}>
+                Updating via the APK link preserves all your accounts, transactions, and security settings automatically.
+              </Text>
+
+              <View style={styles.updateActions}>
+                <TouchableOpacity
+                  style={[styles.updateBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => Linking.openURL('https://rajarshi-cmd.github.io/Aegis_Spendly/')}
+                >
+                  <Ionicons name="download-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.updateBtnText}>Download Latest APK</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.updateSecondaryBtn, { borderColor: colors.borderSubtle }]}
+                  onPress={() => Linking.openURL('https://github.com/rajarshi-cmd/Aegis_Spendly/releases')}
+                >
+                  <Ionicons name="logo-github" size={15} color={colors.textPrimary} style={{ marginRight: 6 }} />
+                  <Text style={[styles.updateSecondaryBtnText, { color: colors.textPrimary }]}>Releases</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
 
@@ -612,5 +675,71 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  updateCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  updateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  updateTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  updateVersion: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  updateTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  updateTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  updateDesc: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  updateActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  updateBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  updateBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  updateSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  updateSecondaryBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

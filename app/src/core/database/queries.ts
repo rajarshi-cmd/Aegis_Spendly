@@ -4,6 +4,7 @@ import { Transaction, TransactionFilter } from '../types/transactions';
 import { Debt, SettlementRecord } from '../types/debts';
 import { RecurringObligation, CreateObligationInput } from '../types/upcoming';
 import { InvestmentAsset, CreateInvestmentInput } from '../types/investments';
+import { kvStorage } from '../storage/kvStorage';
 
 function generateUUID(): string {
   // RFC4122 v4 UUID generator (zero external dependencies)
@@ -167,11 +168,7 @@ export async function purgeSeedDataAndInitializeUserVault(
     keepTrackRatio?: number;
   }>
 ): Promise<void> {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem('aegis_vault_initialized', 'true');
-    } catch {}
-  }
+  kvStorage.setItem('aegis_vault_initialized', 'true');
 
   await db.withTransaction(async () => {
     // Delete all existing placeholder transactions, debts, settlements, obligations, investments and accounts

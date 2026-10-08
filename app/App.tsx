@@ -154,7 +154,17 @@ const MainNavigator: React.FC = () => {
   };
 
   return (
-    <View style={[styles.appRoot, { backgroundColor: colors.background, paddingTop: isDesktop ? 0 : insets.top }]}>
+    <View
+      style={[
+        styles.appRoot,
+        {
+          backgroundColor: colors.background,
+          paddingTop: isDesktop ? 0 : insets.top,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
       <StatusBar style={themeName === 'Night Ledger' ? 'light' : 'dark'} />
 
       {isDesktop ? (

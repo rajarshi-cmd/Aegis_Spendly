@@ -127,17 +127,14 @@ export const DEFAULT_SYNC_CONFIG: SyncScheduleConfig = {
   autoSyncEnabled: true,
 };
 
+import { kvStorage } from '../storage/kvStorage';
+
 const SYNC_CONFIG_STORAGE_KEY = 'aegis_sync_config_data';
-let memorySyncConfigStorage: string | null = null;
 
 export function saveSyncConfig(config: SyncScheduleConfig): void {
   try {
     const data = JSON.stringify(config);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(SYNC_CONFIG_STORAGE_KEY, data);
-    } else {
-      memorySyncConfigStorage = data;
-    }
+    kvStorage.setItem(SYNC_CONFIG_STORAGE_KEY, data);
   } catch (e) {
     console.warn('[SyncConfig] Failed to save sync config', e);
   }
@@ -145,12 +142,7 @@ export function saveSyncConfig(config: SyncScheduleConfig): void {
 
 export function loadSyncConfig(): SyncScheduleConfig | null {
   try {
-    let data: string | null = null;
-    if (typeof localStorage !== 'undefined') {
-      data = localStorage.getItem(SYNC_CONFIG_STORAGE_KEY);
-    } else {
-      data = memorySyncConfigStorage;
-    }
+    const data = kvStorage.getItem(SYNC_CONFIG_STORAGE_KEY);
     if (data) {
       return JSON.parse(data) as SyncScheduleConfig;
     }

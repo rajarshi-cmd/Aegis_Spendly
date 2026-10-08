@@ -12,14 +12,24 @@ import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 
 export const LockScreen: React.FC = () => {
   const { colors } = useTheme();
-  const { user, unlockWithPin, signOut } = useAuthSecurity();
+  const {
+    user,
+    unlockWithPin,
+    signOut,
+    failedPinAttempts,
+    lockoutRemainingSeconds,
+    remainingAttemptsBeforeWipe,
+    config,
+  } = useAuthSecurity();
 
   const [pin, setPin] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  const isLockedOut = lockoutRemainingSeconds > 0;
+
   const handleDigit = async (digit: string) => {
-    if (isVerifying || pin.length >= 4) return;
+    if (isVerifying || isLockedOut || pin.length >= 4) return;
     setErrorMessage(null);
     const nextPin = pin + digit;
     setPin(nextPin);
@@ -28,7 +38,16 @@ export const LockScreen: React.FC = () => {
       setIsVerifying(true);
       const success = await unlockWithPin(nextPin);
       if (!success) {
-        setErrorMessage('Incorrect PIN. Please try again.');
+        if (config.autoDeleteOnFailedPin && config.autoDeleteThreshold) {
+          const rem = Math.max(0, config.autoDeleteThreshold - (failedPinAttempts + 1));
+          if (rem <= 0) {
+            setErrorMessage('Vault deleted due to maximum wrong PIN attempts.');
+          } else {
+            setErrorMessage(`Incorrect PIN. Vault will be deleted after ${rem} more wrong input${rem === 1 ? '' : 's'}!`);
+          }
+        } else {
+          setErrorMessage('Incorrect PIN. Please try again.');
+        }
         setTimeout(() => {
           setPin('');
           setIsVerifying(false);
@@ -40,13 +59,13 @@ export const LockScreen: React.FC = () => {
   };
 
   const handleBackspace = () => {
-    if (isVerifying) return;
+    if (isVerifying || isLockedOut) return;
     setErrorMessage(null);
     setPin((prev) => prev.slice(0, -1));
   };
 
   const handleClear = () => {
-    if (isVerifying) return;
+    if (isVerifying || isLockedOut) return;
     setErrorMessage(null);
     setPin('');
   };
@@ -123,15 +142,30 @@ export const LockScreen: React.FC = () => {
           })}
         </View>
 
-        {/* Error message */}
-        {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+        {/* Lockout or Error message */}
+        {isLockedOut ? (
+          <View style={[styles.lockoutBanner, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
+            <Ionicons name="timer-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+            <Text style={styles.lockoutText}>
+              Vault locked. Try again in {lockoutRemainingSeconds}s
+            </Text>
+          </View>
+        ) : errorMessage ? (
+          <Text style={[styles.errorText, { color: '#EF4444' }]}>{errorMessage}</Text>
+        ) : config.autoDeleteOnFailedPin && remainingAttemptsBeforeWipe !== null && failedPinAttempts > 0 ? (
+          <Text style={[styles.errorText, { color: '#DC2626', fontWeight: '700' }]}>
+            ⚠️ Vault will be deleted after {remainingAttemptsBeforeWipe} more wrong input{remainingAttemptsBeforeWipe === 1 ? '' : 's'}
+          </Text>
+        ) : failedPinAttempts >= 3 ? (
+          <Text style={[styles.errorText, { color: '#D97706' }]}>
+            ⚠️ {Math.max(1, 5 - failedPinAttempts)} attempt(s) left before lockout
+          </Text>
         ) : (
           <View style={{ height: 18 }} />
         )}
 
         {/* Numeric Keypad */}
-        <View style={styles.keypad}>
+        <View style={[styles.keypad, isLockedOut && { opacity: 0.35 }]}>
           {[
             ['1', '2', '3'],
             ['4', '5', '6'],
@@ -144,6 +178,7 @@ export const LockScreen: React.FC = () => {
                 return (
                   <TouchableOpacity
                     key={key}
+                    disabled={isLockedOut || isVerifying}
                     style={[
                       styles.keyBtn,
                       {
@@ -157,7 +192,6 @@ export const LockScreen: React.FC = () => {
                       else handleDigit(key);
                     }}
                     activeOpacity={0.7}
-                    disabled={isVerifying}
                   >
                     {key === '⌫' ? (
                       <Ionicons name="backspace-outline" size={20} color={colors.textSecondary} />
@@ -271,6 +305,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  lockoutBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  lockoutText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '700',
   },
   keypad: {
     width: '100%',

@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 
+const KEYPAD_ROWS = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+  ['C', '0', '⌫'],
+];
+
 export const PinSetupScreen: React.FC = () => {
   const { colors } = useTheme();
   const { user, setupPin, signOut } = useAuthSecurity();
-  const { width } = useWindowDimensions();
 
   const [step, setStep] = useState<'ENTER' | 'CONFIRM'>('ENTER');
   const [firstPin, setFirstPin] = useState('');
@@ -26,14 +25,12 @@ export const PinSetupScreen: React.FC = () => {
   const handleDigit = (digit: string) => {
     setErrorMessage(null);
     if (activePin.length >= 4) return;
-    const next = activePin + digit;
 
+    const next = activePin + digit;
     if (step === 'ENTER') {
       setFirstPin(next);
       if (next.length === 4) {
-        setTimeout(() => {
-          setStep('CONFIRM');
-        }, 200);
+        setTimeout(() => setStep('CONFIRM'), 200);
       }
     } else {
       setConfirmPin(next);
@@ -42,6 +39,9 @@ export const PinSetupScreen: React.FC = () => {
           setupPin(next);
         } else {
           setErrorMessage('PINs did not match. Please try again.');
+          if (Platform.OS !== 'web') {
+            Vibration.vibrate(200);
+          }
           setTimeout(() => {
             setFirstPin('');
             setConfirmPin('');
@@ -98,7 +98,7 @@ export const PinSetupScreen: React.FC = () => {
         <View style={[styles.userChip, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
           <Ionicons name="person-circle" size={18} color={colors.primary} style={{ marginRight: 6 }} />
           <Text style={[styles.userChipText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {user?.name || 'Google User'} ({user?.email})
+            {user?.name || 'Spendly User'} ({user?.email})
           </Text>
         </View>
 
@@ -112,9 +112,18 @@ export const PinSetupScreen: React.FC = () => {
         </Text>
         <Text style={[styles.sub, { color: colors.textMuted }]}>
           {step === 'ENTER'
-            ? 'Set a 4-digit code to lock and quickly unlock your ledger on this browser.'
+            ? 'Set a 4-digit code to encrypt and unlock your financial vault.'
             : 'Re-enter your 4-digit code to confirm and encrypt your vault.'}
         </Text>
+
+        {/* Security Importance Notice (DEF-005) */}
+        <View style={[styles.vaultWarningBanner, { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
+          <Ionicons name="shield-checkmark" size={16} color="#D97706" style={{ marginRight: 6, marginTop: 1 }} />
+          <Text style={[styles.vaultWarningText, { color: colors.textSecondary }]}>
+            <Text style={{ fontWeight: '700', color: '#D97706' }}>Key Notice: </Text>
+            This PIN is the master key for your vault on this device. Even if you sign out, your data remains safely stored and can only be opened with this PIN.
+          </Text>
+        </View>
 
         {/* 4 Pin Dots */}
         <View style={styles.dotsRow}>
@@ -144,12 +153,7 @@ export const PinSetupScreen: React.FC = () => {
 
         {/* Keypad */}
         <View style={styles.keypad}>
-          {[
-            ['1', '2', '3'],
-            ['4', '5', '6'],
-            ['7', '8', '9'],
-            ['C', '0', '⌫'],
-          ].map((row, rIdx) => (
+          {KEYPAD_ROWS.map((row, rIdx) => (
             <View key={rIdx} style={styles.keypadRow}>
               {row.map((key) => {
                 const isSpecial = key === 'C' || key === '⌫';
@@ -157,10 +161,10 @@ export const PinSetupScreen: React.FC = () => {
                   <TouchableOpacity
                     key={key}
                     style={[
-                      styles.keyBtn,
+                      styles.keypadKey,
                       {
-                        backgroundColor: isSpecial ? 'transparent' : colors.background,
-                        borderColor: isSpecial ? 'transparent' : colors.borderSubtle,
+                        backgroundColor: isSpecial ? colors.background : colors.surface,
+                        borderColor: colors.borderSubtle,
                       },
                     ]}
                     onPress={() => {
@@ -171,7 +175,7 @@ export const PinSetupScreen: React.FC = () => {
                     activeOpacity={0.7}
                   >
                     {key === '⌫' ? (
-                      <Ionicons name="backspace-outline" size={20} color={colors.textSecondary} />
+                      <Ionicons name="backspace-outline" size={20} color={colors.textPrimary} />
                     ) : (
                       <Text
                         style={[
@@ -250,56 +254,72 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sub: {
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  vaultWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+    width: '100%',
+  },
+  vaultWarningText: {
+    fontSize: 11,
+    lineHeight: 16,
+    flex: 1,
   },
   dotsRow: {
     flexDirection: 'row',
     gap: 16,
-    marginBottom: 10,
+    marginVertical: 12,
   },
   dot: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 2,
+    borderWidth: 1.5,
   },
   errorText: {
-    color: '#DC2626',
+    color: '#EF4444',
     fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontWeight: '600',
+    height: 18,
     textAlign: 'center',
   },
   keypad: {
     width: '100%',
-    gap: 12,
+    maxWidth: 260,
     marginTop: 8,
+    gap: 10,
   },
   keypadRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  keyBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  keypadKey: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   keyText: {
-    fontSize: 20,
+    fontSize: 19,
   },
   signOutBtn: {
-    marginTop: 20,
-    padding: 8,
+    marginTop: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   signOutText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
 });

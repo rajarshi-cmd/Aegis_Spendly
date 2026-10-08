@@ -18,6 +18,13 @@ import { UserProfile, AvatarId } from '../../../core/types/profile';
 import { AutoLockPreset } from '../../../core/types/auth';
 import { SyncCadence, DayOfWeek } from '../../../core/types/sync';
 import { formatRupee } from '../../../core/utils/currency';
+import {
+  validateUsername as checkUsername,
+  validateCalendarDay,
+  clampCalendarDay,
+  validateKeepTrackRatio,
+  parseBalanceInput,
+} from '../../../core/utils/validators';
 
 type OnboardingStep =
   | 'IDENTITY'
@@ -57,9 +64,9 @@ export const OnboardingScreen: React.FC = () => {
   const [isFinishing, setIsFinishing] = useState(false);
 
   // Step 1: Identity fields
-  const [username, setUsername] = useState(user?.username || 'rajarshi');
-  const [displayName, setDisplayName] = useState(user?.name || 'Rajarshi Giri');
-  const [email, setEmail] = useState(user?.email || 'rajarshi250500@gmail.com');
+  const [username, setUsername] = useState(user?.username || '');
+  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [avatar, setAvatar] = useState<AvatarId>('Moon cat');
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
@@ -67,43 +74,49 @@ export const OnboardingScreen: React.FC = () => {
   const [banks, setBanks] = useState<BankDraft[]>([]);
   const [newBankName, setNewBankName] = useState('');
   const [newBankBalance, setNewBankBalance] = useState('');
-  const [newBankMinBalance, setNewBankMinBalance] = useState('0');
+  const [newBankMinBalance, setNewBankMinBalance] = useState('');
 
   // Step 3: Credit Cards (STARTS COMPLETELY EMPTY - No pre-added cards!)
   const [cards, setCards] = useState<CardDraft[]>([]);
   const [newCardName, setNewCardName] = useState('');
   const [newCardLimit, setNewCardLimit] = useState('');
-  const [newCardBalance, setNewCardBalance] = useState('0');
+  const [newCardBalance, setNewCardBalance] = useState('');
   const [newCardCutDay, setNewCardCutDay] = useState('15');
   const [newCardDueDay, setNewCardDueDay] = useState('5');
   const [newCardKeepTrackRatio, setNewCardKeepTrackRatio] = useState<number>(50); // Default 50%
   const [newCardColor, setNewCardColor] = useState<'EMERALD' | 'PURPLE' | 'CARAMEL'>('EMERALD');
+  const [cardCutDayError, setCardCutDayError] = useState<string | null>(null);
+  const [cardDueDayError, setCardDueDayError] = useState<string | null>(null);
 
   // Step 4: Income Type (Salaried vs Other Payments)
   const [incomeType, setIncomeType] = useState<'SALARIED' | 'OTHER'>('SALARIED');
-  const [salaryAmount, setSalaryAmount] = useState('148000');
+  const [salaryAmount, setSalaryAmount] = useState('');
   const [salaryDay, setSalaryDay] = useState('1');
   const [selectedSalaryBank, setSelectedSalaryBank] = useState<string>('');
+  const [salaryBankError, setSalaryBankError] = useState<string | null>(null);
 
-  // Step 5: Google Drive
+  // Step 5: Google Drive (Hidden per DEF-008 until Phase 2)
+  const SHOW_DRIVE_STEP = false;
   const [driveFolderName, setDriveFolderName] = useState('Aegis Spendly');
   const [syncCadence, setSyncCadence] = useState<SyncCadence>('DAILY');
   const [dailyTime, setDailyTime] = useState('22:00');
   const [weeklyDay, setWeeklyDay] = useState<DayOfWeek>('SUNDAY');
 
-  // Step 6: Auto-Lock Security
+  // Step 6: Auto-Lock Security & Auto-Delete (DEF-001, DEF-007)
   const [selectedPreset, setSelectedPreset] = useState<AutoLockPreset>('BALANCED');
   const [autoLockOnBlur, setAutoLockOnBlur] = useState(true);
   const [inactivityMinutes, setInactivityMinutes] = useState(5);
+  const [autoDeleteOnFailedPin, setAutoDeleteOnFailedPin] = useState(false);
+  const [autoDeleteThreshold, setAutoDeleteThreshold] = useState(5);
 
   const STEPS: { id: OnboardingStep; label: string; number: number }[] = [
     { id: 'IDENTITY', label: 'Identity', number: 1 },
     { id: 'BANKS', label: 'Banks', number: 2 },
     { id: 'CARDS', label: 'Cards', number: 3 },
     { id: 'SALARY', label: 'Income', number: 4 },
-    { id: 'DRIVE', label: 'Drive Sync', number: 5 },
-    { id: 'SECURITY', label: 'Auto-Lock', number: 6 },
-    { id: 'CONFIRMATION', label: 'Ready', number: 7 },
+    ...(SHOW_DRIVE_STEP ? [{ id: 'DRIVE' as OnboardingStep, label: 'Drive Sync', number: 5 }] : []),
+    { id: 'SECURITY', label: 'Auto-Lock', number: SHOW_DRIVE_STEP ? 6 : 5 },
+    { id: 'CONFIRMATION', label: 'Ready', number: SHOW_DRIVE_STEP ? 7 : 6 },
   ];
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
@@ -124,13 +137,9 @@ export const OnboardingScreen: React.FC = () => {
 
   // Validation for Step 1
   const validateUsername = (val: string): boolean => {
-    const cleaned = val.trim().toLowerCase().replace(/^@/, '');
-    if (cleaned.length < 3) {
-      setUsernameError('Username must be at least 3 characters.');
-      return false;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(cleaned)) {
-      setUsernameError('Letters, numbers and underscores only.');
+    const res = checkUsername(val);
+    if (!res.isValid) {
+      setUsernameError(res.error || 'Invalid username');
       return false;
     }
     setUsernameError(null);
@@ -144,8 +153,8 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleAddBank = () => {
     if (!newBankName.trim()) return;
-    const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-    const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+    const bal = parseBalanceInput(newBankBalance, 0);
+    const minBal = parseBalanceInput(newBankMinBalance, 0);
     setBanks((prev) => [
       ...prev,
       {
@@ -157,19 +166,44 @@ export const OnboardingScreen: React.FC = () => {
     ]);
     setNewBankName('');
     setNewBankBalance('');
-    setNewBankMinBalance('0');
+    setNewBankMinBalance('');
   };
 
   const handleRemoveBank = (id: string) => {
     setBanks((prev) => prev.filter((b) => b.id !== id));
   };
 
+  const validateCutDayInput = (val: string): boolean => {
+    const res = validateCalendarDay(val);
+    if (!res.isValid) {
+      setCardCutDayError(res.error || 'Day must be between 1 and 31');
+      return false;
+    }
+    setCardCutDayError(null);
+    return true;
+  };
+
+  const validateDueDayInput = (val: string): boolean => {
+    const res = validateCalendarDay(val);
+    if (!res.isValid) {
+      setCardDueDayError(res.error || 'Day must be between 1 and 31');
+      return false;
+    }
+    setCardDueDayError(null);
+    return true;
+  };
+
   const handleAddCard = () => {
     if (!newCardName.trim()) return;
-    const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-    const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-    const cut = parseInt(newCardCutDay, 10) || 15;
-    const due = parseInt(newCardDueDay, 10) || 5;
+    const isCutValid = validateCutDayInput(newCardCutDay);
+    const isDueValid = validateDueDayInput(newCardDueDay);
+    if (!isCutValid || !isDueValid) return;
+
+    const lim = parseBalanceInput(newCardLimit, 100000);
+    const bal = parseBalanceInput(newCardBalance, 0);
+    const cut = clampCalendarDay(newCardCutDay, 15);
+    const due = clampCalendarDay(newCardDueDay, 5);
+    const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
     setCards((prev) => [
       ...prev,
       {
@@ -179,14 +213,18 @@ export const OnboardingScreen: React.FC = () => {
         balance: bal,
         cutDay: cut,
         dueDay: due,
-        keepTrackRatio: newCardKeepTrackRatio,
+        keepTrackRatio: ratio,
         color: newCardColor,
       },
     ]);
     setNewCardName('');
     setNewCardLimit('');
-    setNewCardBalance('0');
+    setNewCardBalance('');
+    setNewCardCutDay('15');
+    setNewCardDueDay('5');
     setNewCardKeepTrackRatio(50);
+    setCardCutDayError(null);
+    setCardDueDayError(null);
   };
 
   const handleRemoveCard = (id: string) => {
@@ -219,8 +257,8 @@ export const OnboardingScreen: React.FC = () => {
 
   const handleContinueFromBanks = () => {
     if (newBankName.trim()) {
-      const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-      const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+      const bal = parseBalanceInput(newBankBalance, 0);
+      const minBal = parseBalanceInput(newBankMinBalance, 0);
       setBanks((prev) => [
         ...prev,
         {
@@ -232,17 +270,22 @@ export const OnboardingScreen: React.FC = () => {
       ]);
       setNewBankName('');
       setNewBankBalance('');
-      setNewBankMinBalance('0');
+      setNewBankMinBalance('');
     }
     setCurrentStep('CARDS');
   };
 
   const handleContinueFromCards = () => {
     if (newCardName.trim()) {
-      const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-      const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-      const cut = parseInt(newCardCutDay, 10) || 15;
-      const due = parseInt(newCardDueDay, 10) || 5;
+      const isCutValid = validateCutDayInput(newCardCutDay);
+      const isDueValid = validateDueDayInput(newCardDueDay);
+      if (!isCutValid || !isDueValid) return;
+
+      const lim = parseBalanceInput(newCardLimit, 100000);
+      const bal = parseBalanceInput(newCardBalance, 0);
+      const cut = clampCalendarDay(newCardCutDay, 15);
+      const due = clampCalendarDay(newCardDueDay, 5);
+      const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
       setCards((prev) => [
         ...prev,
         {
@@ -252,14 +295,18 @@ export const OnboardingScreen: React.FC = () => {
           balance: bal,
           cutDay: cut,
           dueDay: due,
-          keepTrackRatio: newCardKeepTrackRatio,
+          keepTrackRatio: ratio,
           color: newCardColor,
         },
       ]);
       setNewCardName('');
       setNewCardLimit('');
-      setNewCardBalance('0');
+      setNewCardBalance('');
+      setNewCardCutDay('15');
+      setNewCardDueDay('5');
       setNewCardKeepTrackRatio(50);
+      setCardCutDayError(null);
+      setCardDueDayError(null);
     }
     setCurrentStep('SALARY');
   };
@@ -270,8 +317,8 @@ export const OnboardingScreen: React.FC = () => {
       // Auto-commit any trailing entered bank or card if user didn't hit + Add
       const allBanks = [...banks];
       if (newBankName.trim()) {
-        const bal = parseFloat(newBankBalance.replace(/[^0-9.]/g, '')) || 0;
-        const minBal = parseFloat(newBankMinBalance.replace(/[^0-9.]/g, '')) || 0;
+        const bal = parseBalanceInput(newBankBalance, 0);
+        const minBal = parseBalanceInput(newBankMinBalance, 0);
         allBanks.push({
           id: 'b-' + Date.now(),
           name: newBankName.trim(),
@@ -282,10 +329,11 @@ export const OnboardingScreen: React.FC = () => {
 
       const allCards = [...cards];
       if (newCardName.trim()) {
-        const lim = parseFloat(newCardLimit.replace(/[^0-9.]/g, '')) || 100000;
-        const bal = parseFloat(newCardBalance.replace(/[^0-9.]/g, '')) || 0;
-        const cut = parseInt(newCardCutDay, 10) || 15;
-        const due = parseInt(newCardDueDay, 10) || 5;
+        const lim = parseBalanceInput(newCardLimit, 100000);
+        const bal = parseBalanceInput(newCardBalance, 0);
+        const cut = clampCalendarDay(newCardCutDay, 15);
+        const due = clampCalendarDay(newCardDueDay, 5);
+        const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
         allCards.push({
           id: 'c-' + Date.now(),
           name: newCardName.trim(),
@@ -293,7 +341,7 @@ export const OnboardingScreen: React.FC = () => {
           balance: bal,
           cutDay: cut,
           dueDay: due,
-          keepTrackRatio: newCardKeepTrackRatio,
+          keepTrackRatio: ratio,
           color: newCardColor,
         });
       }
@@ -319,13 +367,13 @@ export const OnboardingScreen: React.FC = () => {
       // 2. Update User Profile
       const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');
       const profileUpdates: Partial<UserProfile> = {
-        name: displayName.trim() || 'Rajarshi Giri',
+        name: displayName.trim() || cleanUsername || 'User',
         username: cleanUsername,
         handle: `@${cleanUsername}`,
         email: email.trim(),
         avatar,
-        salary_amount: incomeType === 'SALARIED' ? parseFloat(salaryAmount) || 0 : 0,
-        salary_day: incomeType === 'SALARIED' ? parseInt(salaryDay, 10) || 1 : 1,
+        salary_amount: incomeType === 'SALARIED' ? parseBalanceInput(salaryAmount, 0) : 0,
+        salary_day: incomeType === 'SALARIED' ? clampCalendarDay(salaryDay, 1) : 1,
         salary_account_id: selectedSalaryBank || (banks[0]?.name ?? ''),
         driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
         isOnboarded: true,
@@ -346,6 +394,8 @@ export const OnboardingScreen: React.FC = () => {
         autoLockOnBlur,
         inactivityTimeoutMinutes: inactivityMinutes,
         lockPreset: selectedPreset,
+        autoDeleteOnFailedPin,
+        autoDeleteThreshold,
       });
 
       // 5. Complete auth onboarding
@@ -375,7 +425,7 @@ export const OnboardingScreen: React.FC = () => {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollRoot} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollRoot, { padding: isDesktop ? 16 : 10 }]} showsVerticalScrollIndicator={false}>
         <View style={[styles.container, { maxWidth: isDesktop ? 680 : '100%' }]}>
           {/* Header Stepper Navigation */}
           <View style={styles.stepperRow}>
@@ -423,7 +473,16 @@ export const OnboardingScreen: React.FC = () => {
           </View>
 
           {/* Main Content Card */}
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.borderSubtle,
+                padding: isDesktop ? 24 : 16,
+              },
+            ]}
+          >
             {/* STEP 1: IDENTITY & USERNAME */}
             {currentStep === 'IDENTITY' && (
               <View>
@@ -434,7 +493,7 @@ export const OnboardingScreen: React.FC = () => {
 
                 <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Aegis Spendly</Text>
                 <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Let's personalize your ledger. All data is kept strictly on-device and in your private Google Drive.
+                  Let's personalize your ledger. All data is kept strictly on-device, fully encrypted and 100% offline.
                 </Text>
 
                 {/* Username Field (MANDATORY) */}
@@ -489,7 +548,7 @@ export const OnboardingScreen: React.FC = () => {
                 {/* Email Field */}
                 <View style={styles.formGroup}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>
-                    GOOGLE ACCOUNT EMAIL (DRIVE AUTHOR & ALERTS)
+                    ACCOUNT EMAIL (OPTIONAL ALERTS & NOTIFICATIONS)
                   </Text>
                   <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
                     <Ionicons name="mail-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
@@ -632,7 +691,7 @@ export const OnboardingScreen: React.FC = () => {
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>MINIMUM BALANCE REQUIRED (₹)</Text>
                       <TextInput
                         style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="e.g. 10000 (0 for zero balance)"
+                        placeholder="0 (Optional)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newBankMinBalance}
@@ -753,7 +812,7 @@ export const OnboardingScreen: React.FC = () => {
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT OUTSTANDING / SPENT (₹)</Text>
                       <TextInput
                         style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="0 (if fully paid)"
+                        placeholder="0 (Optional)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardBalance}
@@ -767,25 +826,45 @@ export const OnboardingScreen: React.FC = () => {
                     <View style={[styles.formField, { flex: 1 }]}>
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BILL STATEMENT CUT-OFF DAY (1 - 31)</Text>
                       <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        style={[
+                          styles.fieldInput,
+                          {
+                            borderColor: cardCutDayError ? '#DC2626' : colors.border,
+                            color: colors.textPrimary,
+                          },
+                        ]}
                         placeholder="e.g. 15 (15th of month)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardCutDay}
-                        onChangeText={setNewCardCutDay}
+                        onChangeText={(val) => {
+                          setNewCardCutDay(val);
+                          validateCutDayInput(val);
+                        }}
                       />
+                      {cardCutDayError && <Text style={styles.errorText}>{cardCutDayError}</Text>}
                     </View>
 
                     <View style={[styles.formField, { flex: 1 }]}>
                       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>PAYMENT DUE DATE (1 - 31)</Text>
                       <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
+                        style={[
+                          styles.fieldInput,
+                          {
+                            borderColor: cardDueDayError ? '#DC2626' : colors.border,
+                            color: colors.textPrimary,
+                          },
+                        ]}
                         placeholder="e.g. 5 (5th of next month)"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="numeric"
                         value={newCardDueDay}
-                        onChangeText={setNewCardDueDay}
+                        onChangeText={(val) => {
+                          setNewCardDueDay(val);
+                          validateDueDayInput(val);
+                        }}
                       />
+                      {cardDueDayError && <Text style={styles.errorText}>{cardDueDayError}</Text>}
                     </View>
                   </View>
 
@@ -809,11 +888,11 @@ export const OnboardingScreen: React.FC = () => {
                       <View style={{ marginVertical: 10 }}>
                         <input
                           type="range"
-                          min="10"
+                          min="0"
                           max="100"
                           step="5"
                           value={newCardKeepTrackRatio}
-                          onChange={(e: any) => setNewCardKeepTrackRatio(Number(e.target.value))}
+                          onChange={(e: any) => setNewCardKeepTrackRatio(validateKeepTrackRatio(e.target.value))}
                           style={{
                             width: '100%',
                             height: '8px',
@@ -828,7 +907,7 @@ export const OnboardingScreen: React.FC = () => {
 
                     {/* Quick Preset Buttons for Mobile or Quick Click */}
                     <View style={styles.quickRatioRow}>
-                      {[30, 40, 50, 60, 75].map((pct) => (
+                      {[0, 30, 50, 75, 100].map((pct) => (
                         <TouchableOpacity
                           key={pct}
                           style={[
@@ -961,12 +1040,12 @@ export const OnboardingScreen: React.FC = () => {
                     ]}
                     onPress={() => setIncomeType('SALARIED')}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
                         <View style={[styles.incomeIconBox, { backgroundColor: '#DCFCE7' }]}>
                           <Ionicons name="briefcase-outline" size={18} color="#15803D" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
                             Salaried Employee (Regular Monthly Inflow)
                           </Text>
@@ -994,12 +1073,12 @@ export const OnboardingScreen: React.FC = () => {
                     ]}
                     onPress={() => setIncomeType('OTHER')}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
                         <View style={[styles.incomeIconBox, { backgroundColor: '#EDE9FE' }]}>
                           <Ionicons name="cash-outline" size={18} color="#7C3AED" />
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
                             Freelance / Variable Income / Other Payments
                           </Text>
@@ -1046,10 +1125,25 @@ export const OnboardingScreen: React.FC = () => {
                       />
                     </View>
 
-                    {/* Linked Bank Selection if banks exist */}
-                    {banks.length > 0 && (
+                    {/* Linked Bank Selection (MANDATORY per DEF-003) */}
+                    {banks.length === 0 ? (
+                      <View style={[styles.guidanceCard, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', marginTop: 12 }]}>
+                        <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.guidanceTitle, { color: '#DC2626' }]}>Bank Account Required</Text>
+                          <Text style={[styles.guidanceSub, { color: '#991B1B' }]}>
+                            You haven't added any banks yet. To set up salaried income, please go back to the Banks step and add your salary bank, or switch to Flexible Inflow mode below.
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
                       <View style={styles.formField}>
-                        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SALARY CREDITED TO BANK</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                            SALARY CREDITED TO BANK <Text style={{ color: '#DC2626' }}>*</Text>
+                          </Text>
+                          <Text style={[styles.helper, { color: '#DC2626', fontSize: 11 }]}>Mandatory</Text>
+                        </View>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                           {banks.map((b) => {
                             const isSelected = selectedSalaryBank === b.name;
@@ -1063,7 +1157,10 @@ export const OnboardingScreen: React.FC = () => {
                                     borderColor: isSelected ? colors.primary : colors.borderSubtle,
                                   },
                                 ]}
-                                onPress={() => setSelectedSalaryBank(b.name)}
+                                onPress={() => {
+                                  setSelectedSalaryBank(b.name);
+                                  setSalaryBankError(null);
+                                }}
                               >
                                 <Text style={{ color: isSelected ? '#FFFFFF' : colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
                                   {b.name}
@@ -1073,6 +1170,10 @@ export const OnboardingScreen: React.FC = () => {
                           })}
                         </View>
                       </View>
+                    )}
+
+                    {salaryBankError && (
+                      <Text style={[styles.errorText, { marginTop: 6 }]}>{salaryBankError}</Text>
                     )}
                   </View>
                 ) : (
@@ -1084,7 +1185,7 @@ export const OnboardingScreen: React.FC = () => {
                         Flexible Inflow Mode Active
                       </Text>
                       <Text style={[styles.guidanceSub, { color: '#166534' }]}>
-                        Whenever you receive client payouts, freelance fees, or dividends, simply tap '+ Add Entry' in the top header and record a 'Deposit / Inflow' to your account.
+                        Whenever you receive client payouts, freelance fees, or dividends, simply tap the bottom '+ Add Entry' button and record a 'Credit / Inflow' to your account.
                       </Text>
                     </View>
                   </View>
@@ -1098,14 +1199,36 @@ export const OnboardingScreen: React.FC = () => {
                   </TouchableOpacity>
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('DRIVE')}>
+                    <TouchableOpacity
+                      style={styles.skipBtn}
+                      onPress={() => {
+                        setSalaryBankError(null);
+                        setIncomeType('OTHER');
+                        setCurrentStep(SHOW_DRIVE_STEP ? 'DRIVE' : 'SECURITY');
+                      }}
+                    >
                       <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                      onPress={() => setCurrentStep('DRIVE')}
+                      onPress={() => {
+                        if (incomeType === 'SALARIED') {
+                          if (banks.length === 0) {
+                            setSalaryBankError('Please go back to Banks step to add at least one bank account first.');
+                            return;
+                          }
+                          if (!selectedSalaryBank) {
+                            setSalaryBankError('Please select at least one bank account where your salary is credited.');
+                            return;
+                          }
+                        }
+                        setSalaryBankError(null);
+                        setCurrentStep(SHOW_DRIVE_STEP ? 'DRIVE' : 'SECURITY');
+                      }}
                     >
-                      <Text style={styles.primaryBtnText}>Continue to Drive Sync</Text>
+                      <Text style={styles.primaryBtnText}>
+                        {SHOW_DRIVE_STEP ? 'Continue to Drive Sync' : 'Continue to Auto-Lock'}
+                      </Text>
                       <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
                     </TouchableOpacity>
                   </View>
@@ -1224,7 +1347,9 @@ export const OnboardingScreen: React.FC = () => {
               <View>
                 <View style={[styles.badgePill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
                   <Ionicons name="lock-closed" size={14} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#B91C1C' }]}>STEP 6 • VAULT AUTO-LOCK FREQUENCY</Text>
+                  <Text style={[styles.badgePillText, { color: '#B91C1C' }]}>
+                    STEP {SHOW_DRIVE_STEP ? 6 : 5} • VAULT AUTO-LOCK & SECURITY
+                  </Text>
                 </View>
 
                 <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Auto-Lock Policy</Text>
@@ -1278,7 +1403,7 @@ export const OnboardingScreen: React.FC = () => {
                         onPress={() => handleSelectPreset(p.id)}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
                             <Ionicons
                               name={p.icon as any}
                               size={18}
@@ -1287,7 +1412,7 @@ export const OnboardingScreen: React.FC = () => {
                             <Text
                               style={[
                                 styles.presetTitle,
-                                { color: isSelected ? colors.primary : colors.textPrimary },
+                                { color: isSelected ? colors.primary : colors.textPrimary, flexShrink: 1 },
                               ]}
                             >
                               {p.title}
@@ -1316,19 +1441,40 @@ export const OnboardingScreen: React.FC = () => {
                       setSelectedPreset('CUSTOM');
                     }}
                   >
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
                         Lock immediately on tab switch / window blur
                       </Text>
                       <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
-                        Hides sensitive financials whenever you switch tabs
+                        Hides sensitive financials whenever you switch tabs or minimize app
                       </Text>
                     </View>
-                    <Ionicons
-                      name={autoLockOnBlur ? 'toggle' : 'toggle-outline'}
-                      size={28}
-                      color={autoLockOnBlur ? colors.primary : colors.textMuted}
-                    />
+                    {/* Custom Sliding Toggle Knob (DEF-001) */}
+                    <View
+                      style={{
+                        width: 46,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: autoLockOnBlur ? colors.primary : '#CBD5E1',
+                        padding: 2,
+                        justifyContent: 'center',
+                        alignItems: autoLockOnBlur ? 'flex-end' : 'flex-start',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: '#FFFFFF',
+                          elevation: 2,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 1.5,
+                        }}
+                      />
+                    </View>
                   </TouchableOpacity>
 
                   <View style={{ marginTop: 10 }}>
@@ -1358,6 +1504,83 @@ export const OnboardingScreen: React.FC = () => {
                         );
                       })}
                     </View>
+                  </View>
+
+                  {/* Auto-Delete Vault on Failed PIN Inputs (DEF-007) */}
+                  <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+                    <TouchableOpacity
+                      style={styles.toggleRow}
+                      onPress={() => setAutoDeleteOnFailedPin(!autoDeleteOnFailedPin)}
+                    >
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={[styles.toggleLabel, { color: autoDeleteOnFailedPin ? '#DC2626' : colors.textPrimary }]}>
+                          Auto-delete vault on failed PIN attempts
+                        </Text>
+                        <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
+                          Permanently wipes all local accounts and records if consecutive wrong PINs are entered.
+                        </Text>
+                      </View>
+                      {/* Sliding Knob for Auto-Delete (DEF-001) */}
+                      <View
+                        style={{
+                          width: 46,
+                          height: 26,
+                          borderRadius: 13,
+                          backgroundColor: autoDeleteOnFailedPin ? '#DC2626' : '#CBD5E1',
+                          padding: 2,
+                          justifyContent: 'center',
+                          alignItems: autoDeleteOnFailedPin ? 'flex-end' : 'flex-start',
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: '#FFFFFF',
+                            elevation: 2,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 1.5,
+                          }}
+                        />
+                      </View>
+                    </TouchableOpacity>
+
+                    {autoDeleteOnFailedPin && (
+                      <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FEF2F2', borderRadius: 8, borderColor: '#FECACA', borderWidth: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#B91C1C', marginBottom: 4 }}>
+                          Auto-Delete Threshold: {autoDeleteThreshold} Failed Inputs
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#7F1D1D', marginBottom: 10 }}>
+                          Vault will be permanently deleted after {autoDeleteThreshold} wrong inputs. Select a threshold from 3 to 10:
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {[3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                            const isSel = autoDeleteThreshold === num;
+                            return (
+                              <TouchableOpacity
+                                key={num}
+                                style={[
+                                  styles.minutePill,
+                                  {
+                                    backgroundColor: isSel ? '#DC2626' : '#FFFFFF',
+                                    borderColor: isSel ? '#DC2626' : '#FECACA',
+                                    minWidth: 34,
+                                  },
+                                ]}
+                                onPress={() => setAutoDeleteThreshold(num)}
+                              >
+                                <Text style={[styles.minutePillText, { color: isSel ? '#FFFFFF' : '#991B1B', fontWeight: isSel ? '700' : '500' }]}>
+                                  {num}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -1400,16 +1623,20 @@ export const OnboardingScreen: React.FC = () => {
                       {displayName} (@{username})
                     </Text>
                   </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Google Account</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{email}</Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Drive Folder</Text>
-                    <Text style={[styles.summaryVal, { color: colors.primary, fontWeight: '700' }]}>
-                      📁 {driveFolderName}
-                    </Text>
-                  </View>
+                  {SHOW_DRIVE_STEP && (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Google Account</Text>
+                        <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{email}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Drive Folder</Text>
+                        <Text style={[styles.summaryVal, { color: colors.primary, fontWeight: '700' }]}>
+                          📁 {driveFolderName}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Bank Accounts</Text>
                     <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
@@ -1435,6 +1662,14 @@ export const OnboardingScreen: React.FC = () => {
                       {autoLockOnBlur ? ' + Tab blur lock' : ''}
                     </Text>
                   </View>
+                  {autoDeleteOnFailedPin && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: '#DC2626' }]}>Auto-Delete Vault</Text>
+                      <Text style={[styles.summaryVal, { color: '#DC2626', fontWeight: '700' }]}>
+                        Wipe after {autoDeleteThreshold} failed PIN attempts
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Bottom Navigation with Back and Launch */}
@@ -1486,28 +1721,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
+    maxWidth: '100%',
   },
   stepIndicatorItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   stepDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepDotText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
   },
   stepConnector: {
-    width: 20,
+    width: 14,
     height: 2,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
   },
   card: {
     borderRadius: 16,

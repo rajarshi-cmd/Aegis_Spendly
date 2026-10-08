@@ -16,6 +16,9 @@ import {
   loadAuthSession,
   clearAuthSession,
 } from '../../core/security/cryptoVault';
+import { clearUserProfile } from '../../core/types/profile';
+import { kvStorage } from '../../core/storage/kvStorage';
+import { getDatabase } from '../../core/database/db';
 
 interface AuthSecurityContextType {
   authStatus: AuthStatus;
@@ -23,14 +26,17 @@ interface AuthSecurityContextType {
   config: AuthSecurityConfig;
   failedPinAttempts: number;
   lockoutRemainingSeconds: number;
+  remainingAttemptsBeforeWipe: number | null;
   updateConfig: (partial: Partial<AuthSecurityConfig>) => void;
   signInWithGoogle: (customDetails?: Partial<AuthUser>) => Promise<void>;
   setupPin: (pin: string) => Promise<boolean>;
+  updatePin: (newPin: string) => Promise<boolean>;
   unlockWithPin: (pin: string) => Promise<boolean>;
   verifyCurrentPin: (pin: string) => Promise<boolean>;
   completeOnboarding: (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => void;
   lockSession: () => void;
   signOut: () => void;
+  deleteVault: () => Promise<void>;
 }
 
 const AuthSecurityContext = createContext<AuthSecurityContextType | null>(null);
@@ -54,7 +60,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const updateTimer = () => {
       const now = Date.now();
-      const diff = Math.ceil((lockoutUntil - now) / 1000);
+      const diff = Math.max(0, Math.ceil((lockoutUntil - now) / 1000));
       if (diff <= 0) {
         setLockoutUntil(null);
         setLockoutRemainingSeconds(0);
@@ -114,46 +120,47 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [authStatus, config.inactivityTimeoutMinutes, lockSession]);
 
-  // Tab switch & window visibility change listener (Web + Mobile AppState)
+  // Handle window focus/blur and tab switching auto-lock
   useEffect(() => {
-    // 1. Mobile AppState listener
-    const handleAppStateChange = (nextState: AppStateStatus) => {
-      if ((nextState === 'background' || nextState === 'inactive') && config.autoLockOnBlur) {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleWindowBlur = () => {
+      if (config.autoLockOnBlur) {
         lockSession();
       }
     };
-    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
 
-    // 2. Web browser tab visibility / blur listener
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const handleVisibilityChange = () => {
-        if (document.hidden && config.autoLockOnBlur) {
-          lockSession();
-        }
-      };
+    const handleVisibilityChange = () => {
+      if (document.hidden && config.autoLockOnBlur) {
+        lockSession();
+      }
+    };
 
-      const handleWindowBlur = () => {
-        if (config.autoLockOnBlur) {
-          lockSession();
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('blur', handleWindowBlur);
-
-      return () => {
-        appStateSub.remove();
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('blur', handleWindowBlur);
-      };
-    }
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      appStateSub.remove();
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [config.autoLockOnBlur, lockSession]);
 
-  // Inactivity / idle interaction listeners on Web
+  // Handle mobile AppState changes (backgrounding / multitasking minimization)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState.match(/inactive|background/) && config.autoLockOnBlur) {
+        lockSession();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [config.autoLockOnBlur, lockSession]);
+
+  // Inactivity tracking (resets idle timer on user touch/activity)
   useEffect(() => {
     if (authStatus !== 'UNLOCKED') {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -162,17 +169,20 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     resetIdleTimer();
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-      const onUserActivity = () => {
-        resetIdleTimer();
-      };
+    const handleUserActivity = () => {
+      resetIdleTimer();
+    };
 
-      activityEvents.forEach((ev) => window.addEventListener(ev, onUserActivity, { passive: true }));
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('mousemove', handleUserActivity);
+      window.addEventListener('keydown', handleUserActivity);
+      window.addEventListener('touchstart', handleUserActivity);
 
       return () => {
+        window.removeEventListener('mousemove', handleUserActivity);
+        window.removeEventListener('keydown', handleUserActivity);
+        window.removeEventListener('touchstart', handleUserActivity);
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-        activityEvents.forEach((ev) => window.removeEventListener(ev, onUserActivity));
       };
     }
 
@@ -232,6 +242,47 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [user]
   );
 
+  const updatePin = useCallback(
+    async (newPin: string): Promise<boolean> => {
+      if (!newPin || newPin.length !== 4) return false;
+      const current = user || loadAuthSession();
+      if (!current) return false;
+      const salt = generateSalt();
+      const hash = await hashPin(newPin, salt);
+      const updated: AuthUser = {
+        ...current,
+        pinSalt: salt,
+        pinHash: hash,
+      };
+      setUser(updated);
+      saveAuthSession(updated);
+      return true;
+    },
+    [user]
+  );
+
+  const deleteVault = useCallback(async (): Promise<void> => {
+    clearAuthSession();
+    clearUserProfile();
+    kvStorage.clear();
+    try {
+      const db = await getDatabase();
+      await db.run('DELETE FROM transactions;');
+      await db.run('DELETE FROM debts;');
+      await db.run('DELETE FROM settlements;');
+      await db.run('DELETE FROM recurring_obligations;');
+      await db.run('DELETE FROM investments;');
+      await db.run('DELETE FROM accounts;');
+    } catch (e) {
+      console.warn('[AuthSecurity] Failed to purge SQLite tables on deleteVault', e);
+    }
+    setUser(null);
+    setFailedPinAttempts(0);
+    setLockoutUntil(null);
+    setLockoutRemainingSeconds(0);
+    setAuthStatus('UNAUTHENTICATED');
+  }, []);
+
   const unlockWithPin = useCallback(
     async (pin: string): Promise<boolean> => {
       if (!user || !user.pinHash || !user.pinSalt) return false;
@@ -255,9 +306,15 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return true;
       }
 
-      // Track failed attempts and trigger lockouts (CWE-307 mitigation)
+      // Track failed attempts and trigger lockouts or auto-wipe
       const nextFailed = failedPinAttempts + 1;
       setFailedPinAttempts(nextFailed);
+
+      // Check auto-delete threshold (DEF-007)
+      if (config.autoDeleteOnFailedPin && config.autoDeleteThreshold && nextFailed >= config.autoDeleteThreshold) {
+        await deleteVault();
+        return false;
+      }
 
       if (nextFailed >= 8) {
         // 5 minute lockout after 8 failed attempts
@@ -273,13 +330,14 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       return false;
     },
-    [user, lockoutUntil, failedPinAttempts]
+    [user, lockoutUntil, failedPinAttempts, config, deleteVault]
   );
 
   const verifyCurrentPin = useCallback(
     async (pin: string): Promise<boolean> => {
-      if (!user || !user.pinHash || !user.pinSalt) return false;
-      return await verifyPin(pin, user.pinSalt, user.pinHash);
+      const activeUser = user || loadAuthSession();
+      if (!activeUser || !activeUser.pinHash || !activeUser.pinSalt) return false;
+      return await verifyPin(pin, activeUser.pinSalt, activeUser.pinHash);
     },
     [user]
   );
@@ -302,8 +360,8 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [user]
   );
 
+  // Sign out keeps the vault and credentials safe on-device (DEF-005)
   const signOut = useCallback(() => {
-    clearAuthSession();
     setUser(null);
     setFailedPinAttempts(0);
     setLockoutUntil(null);
@@ -319,6 +377,11 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, []);
 
+  const remainingAttemptsBeforeWipe =
+    config.autoDeleteOnFailedPin && config.autoDeleteThreshold
+      ? Math.max(0, config.autoDeleteThreshold - failedPinAttempts)
+      : null;
+
   return (
     <AuthSecurityContext.Provider
       value={{
@@ -327,14 +390,17 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         config,
         failedPinAttempts,
         lockoutRemainingSeconds,
+        remainingAttemptsBeforeWipe,
         updateConfig,
         signInWithGoogle,
         setupPin,
+        updatePin,
         unlockWithPin,
         verifyCurrentPin,
         completeOnboarding,
         lockSession,
         signOut,
+        deleteVault,
       }}
     >
       {children}

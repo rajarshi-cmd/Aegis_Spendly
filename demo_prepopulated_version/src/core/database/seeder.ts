@@ -12,7 +12,18 @@ import {
 import { Transaction } from '../types/transactions';
 import { Debt, SettlementRecord } from '../types/debts';
 
+import { kvStorage } from '../storage/kvStorage';
+import { loadUserProfile } from '../types/profile';
+
 export async function seedIfEmpty(db: DatabaseExecutor): Promise<boolean> {
+  if (kvStorage.getItem('aegis_vault_initialized') === 'true') {
+    return false;
+  }
+  const profile = loadUserProfile();
+  if (profile && profile.isOnboarded) {
+    return false;
+  }
+
   const existingAccounts = await getAllAccounts(db);
   if (existingAccounts.length > 0) {
     return false; // Database already seeded or populated

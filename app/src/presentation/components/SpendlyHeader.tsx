@@ -55,6 +55,9 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
   const [showPinForLockSettings, setShowPinForLockSettings] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
+  // DEF-008: Hide Google Drive sync UI until Phase 2
+  const SHOW_DRIVE_SYNC = false;
+
   const handleManualSync = async () => {
     try {
       const res = await triggerGoogleSheetsSync();
@@ -170,63 +173,65 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
             <Text style={[styles.mainSubtitle, { color: colors.textPrimary }]}>{subtitle}</Text>
           </View>
 
-          {/* Right Controls */}
+          {/* Right Controls (Desktop: Month, Add, Bell, Lock, Profile in Top-Right Corner) */}
           <View style={styles.controlsRow}>
-            {/* Dedicated Google Sheets Sync Button */}
-            <View style={styles.syncButtonGroup}>
-              <TouchableOpacity
-                style={[
-                  styles.syncBtn,
-                  {
-                    backgroundColor: isSyncing
-                      ? colors.primaryLight
-                      : pendingChangesCount > 0
-                      ? colors.surface
-                      : colors.surface,
-                    borderColor: pendingChangesCount > 0 ? colors.primary : colors.borderSubtle,
-                  },
-                ]}
-                onPress={handleManualSync}
-                disabled={isSyncing}
-                activeOpacity={0.8}
-              >
-                {isSyncing ? (
-                  <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 6 }} />
-                ) : (
-                  <Ionicons
-                    name={pendingChangesCount > 0 ? 'cloud-upload-outline' : 'cloud-done-outline'}
-                    size={15}
-                    color={pendingChangesCount > 0 ? colors.primary : colors.textSecondary}
-                    style={{ marginRight: 6 }}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.syncBtnText,
-                    { color: pendingChangesCount > 0 ? colors.primary : colors.textSecondary },
-                  ]}
-                >
-                  {isSyncing
-                    ? 'Syncing...'
-                    : pendingChangesCount > 0
-                    ? `Sync (${pendingChangesCount})`
-                    : 'Sheets Synced'}
-                </Text>
-              </TouchableOpacity>
-
-              {onOpenSync && (
+            {/* Dedicated Google Sheets Sync Button (Hidden when SHOW_DRIVE_SYNC is false) */}
+            {SHOW_DRIVE_SYNC && (
+              <View style={styles.syncButtonGroup}>
                 <TouchableOpacity
                   style={[
-                    styles.syncGearBtn,
-                    { backgroundColor: colors.surface, borderColor: colors.borderSubtle },
+                    styles.syncBtn,
+                    {
+                      backgroundColor: isSyncing
+                        ? colors.primaryLight
+                        : pendingChangesCount > 0
+                        ? colors.surface
+                        : colors.surface,
+                      borderColor: pendingChangesCount > 0 ? colors.primary : colors.borderSubtle,
+                    },
                   ]}
-                  onPress={onOpenSync}
-                  activeOpacity={0.7}
+                  onPress={handleManualSync}
+                  disabled={isSyncing}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+                  {isSyncing ? (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 6 }} />
+                  ) : (
+                    <Ionicons
+                      name={pendingChangesCount > 0 ? 'cloud-upload-outline' : 'cloud-done-outline'}
+                      size={15}
+                      color={pendingChangesCount > 0 ? colors.primary : colors.textSecondary}
+                      style={{ marginRight: 6 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.syncBtnText,
+                      { color: pendingChangesCount > 0 ? colors.primary : colors.textSecondary },
+                    ]}
+                  >
+                    {isSyncing
+                      ? 'Syncing...'
+                      : pendingChangesCount > 0
+                      ? `Sync (${pendingChangesCount})`
+                      : 'Sheets Synced'}
+                  </Text>
                 </TouchableOpacity>
-              )}
-            </View>
+
+                {onOpenSync && (
+                  <TouchableOpacity
+                    style={[
+                      styles.syncGearBtn,
+                      { backgroundColor: colors.surface, borderColor: colors.borderSubtle },
+                    ]}
+                    onPress={onOpenSync}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             {/* Month Selector Pill */}
             <TouchableOpacity
@@ -262,6 +267,16 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
               />
             </TouchableOpacity>
 
+            {/* + Add Entry Button (Desktop Primary Action) */}
+            <TouchableOpacity
+              style={[styles.addEntryBtn, { backgroundColor: colors.primary }]}
+              onPress={onOpenAddEntry}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.addEntryText}>Add entry</Text>
+            </TouchableOpacity>
+
             {/* Bell Notifications Button with dynamic count badge */}
             <TouchableOpacity
               style={[
@@ -284,7 +299,16 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
               )}
             </TouchableOpacity>
 
-            {/* User Profile Chip */}
+            {/* Lock Vault Button */}
+            <TouchableOpacity
+              style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
+              onPress={() => setShowLockMenu(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            {/* User Profile Chip (Top Right Corner) */}
             <TouchableOpacity
               style={[
                 styles.profileChip,
@@ -311,102 +335,117 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
                 />
               </View>
               <Text style={[styles.profileName, { color: colors.textPrimary, fontWeight: '700' }]}>
-                Profile ({(profile.name || profile.username || 'User').split(' ')[0]})
+                {(profile.name || profile.username || 'User').split(' ')[0]}
               </Text>
               <Ionicons name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-
-            {/* + Add Entry Button (Primary Action) */}
-            <TouchableOpacity
-              style={[styles.addEntryBtn, { backgroundColor: colors.primary }]}
-              onPress={onOpenAddEntry}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <Text style={styles.addEntryText}>Add entry</Text>
-            </TouchableOpacity>
-
-            {/* Settings button */}
-            <TouchableOpacity
-              style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
-              onPress={() => onOpenSettings(false)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="color-palette-outline" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            {/* Lock Vault Button */}
-            <TouchableOpacity
-              style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
-              onPress={() => setShowLockMenu(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </>
       ) : (
         <View style={{ width: '100%', gap: 10 }}>
-          {/* Mobile Top Row: Hamburger on left, Greeting in middle, Profile & Lock on right */}
+          {/* Mobile Top Row: Left Title Column & Rightmost Profile Button (DEF-006) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            {onOpenSideMenu && (
-              <TouchableOpacity
-                style={[
-                  styles.iconButton,
-                  { backgroundColor: colors.surface, borderColor: colors.borderSubtle, marginRight: 8 },
-                ]}
-                onPress={onOpenSideMenu}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="menu-outline" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
-            )}
-
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={[styles.greetingLabel, { color: colors.textMuted }]} numberOfLines={1}>{title}</Text>
-              <Text style={[styles.mainSubtitle, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={1}>
-                {subtitle}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+              {onOpenSideMenu && (
+                <TouchableOpacity
+                  style={[
+                    styles.iconButton,
+                    { backgroundColor: colors.surface, borderColor: colors.borderSubtle, marginRight: 8 },
+                  ]}
+                  onPress={onOpenSideMenu}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="menu-outline" size={20} color={colors.textPrimary} />
+                </TouchableOpacity>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.greetingLabel, { color: colors.textMuted }]} numberOfLines={1}>{title}</Text>
+                <Text style={[styles.mainSubtitle, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {/* Profile Button - Crystal Clear and Prominent */}
-              <TouchableOpacity
-                style={[
-                  styles.profileChip,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.primary,
-                    borderWidth: 1.5,
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                  },
-                ]}
-                onPress={onOpenProfile}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.avatarIconBox, { backgroundColor: colors.primaryLight, marginRight: 6 }]}>
-                  <Ionicons
-                    name={
-                      profile.avatar === 'Forest rabbit'
-                        ? 'leaf'
-                        : profile.avatar === 'Little ghost'
-                        ? 'happy'
-                        : profile.avatar === 'Star mage'
-                        ? 'sparkles'
-                        : profile.avatar === 'Custom Google'
-                        ? 'logo-google'
-                        : 'person'
-                    }
-                    size={14}
-                    color={colors.primary}
-                  />
-                </View>
-                <Text style={[styles.profileName, { color: colors.textPrimary, fontWeight: '700', fontSize: 13 }]}>
-                  Profile
-                </Text>
-              </TouchableOpacity>
+            {/* Profile Button - Far Top-Right Corner */}
+            <TouchableOpacity
+              style={[
+                styles.profileChip,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.primary,
+                  borderWidth: 1.5,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                },
+              ]}
+              onPress={onOpenProfile}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.avatarIconBox, { backgroundColor: colors.primaryLight, marginRight: 6 }]}>
+                <Ionicons
+                  name={
+                    profile.avatar === 'Forest rabbit'
+                      ? 'leaf'
+                      : profile.avatar === 'Little ghost'
+                      ? 'happy'
+                      : profile.avatar === 'Star mage'
+                      ? 'sparkles'
+                      : profile.avatar === 'Custom Google'
+                      ? 'logo-google'
+                      : 'person'
+                  }
+                  size={14}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={[styles.profileName, { color: colors.textPrimary, fontWeight: '700', fontSize: 13 }]}>
+                Profile
+              </Text>
+              <Ionicons name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 3 }} />
+            </TouchableOpacity>
+          </View>
 
+          {/* Mobile Bottom Row: Month Selector + Notifications & Lock */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+            {/* Month Selector */}
+            <TouchableOpacity
+              style={[
+                styles.monthPill,
+                {
+                  flex: 1,
+                  justifyContent: 'center',
+                  backgroundColor: showMonthDropdown ? colors.primaryLight : colors.surface,
+                  borderColor: showMonthDropdown ? colors.primary : colors.borderSubtle,
+                  paddingHorizontal: 10,
+                },
+              ]}
+              onPress={() => setShowMonthDropdown(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={showMonthDropdown ? colors.primary : colors.textSecondary}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  styles.monthText,
+                  { color: showMonthDropdown ? colors.primary : colors.textPrimary, fontSize: 13, fontWeight: '600' },
+                ]}
+                numberOfLines={1}
+              >
+                {activeMonth}
+              </Text>
+              <Ionicons
+                name={showMonthDropdown ? 'chevron-up' : 'chevron-down'}
+                size={12}
+                color={showMonthDropdown ? colors.primary : colors.textMuted}
+                style={{ marginLeft: 6 }}
+              />
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {/* Bell Notifications */}
               <TouchableOpacity
                 style={[
@@ -438,95 +477,6 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
                 <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Mobile Bottom Row: Month Selector + Sync Status + Add Entry */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
-            {/* Month Selector */}
-            <TouchableOpacity
-              style={[
-                styles.monthPill,
-                {
-                  flex: 1.3,
-                  justifyContent: 'center',
-                  backgroundColor: showMonthDropdown ? colors.primaryLight : colors.surface,
-                  borderColor: showMonthDropdown ? colors.primary : colors.borderSubtle,
-                  paddingHorizontal: 8,
-                },
-              ]}
-              onPress={() => setShowMonthDropdown(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={13}
-                color={showMonthDropdown ? colors.primary : colors.textSecondary}
-                style={{ marginRight: 4 }}
-              />
-              <Text
-                style={[
-                  styles.monthText,
-                  { color: showMonthDropdown ? colors.primary : colors.textPrimary, fontSize: 12 },
-                ]}
-                numberOfLines={1}
-              >
-                {activeMonth}
-              </Text>
-              <Ionicons
-                name={showMonthDropdown ? 'chevron-up' : 'chevron-down'}
-                size={12}
-                color={showMonthDropdown ? colors.primary : colors.textMuted}
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-
-            {/* Sync Button */}
-            <TouchableOpacity
-              style={[
-                styles.syncBtn,
-                {
-                  backgroundColor: isSyncing
-                    ? colors.primaryLight
-                    : pendingChangesCount > 0
-                    ? colors.surface
-                    : colors.surface,
-                  borderColor: pendingChangesCount > 0 ? colors.primary : colors.borderSubtle,
-                  paddingHorizontal: 8,
-                },
-              ]}
-              onPress={handleManualSync}
-              disabled={isSyncing}
-              activeOpacity={0.8}
-            >
-              {isSyncing ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
-              ) : (
-                <Ionicons
-                  name={pendingChangesCount > 0 ? 'cloud-upload-outline' : 'cloud-done-outline'}
-                  size={14}
-                  color={pendingChangesCount > 0 ? colors.primary : colors.textSecondary}
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <Text
-                style={[
-                  styles.syncBtnText,
-                  { color: pendingChangesCount > 0 ? colors.primary : colors.textSecondary, fontSize: 11 },
-                ]}
-              >
-                {isSyncing ? 'Syncing...' : pendingChangesCount > 0 ? `Sync (${pendingChangesCount})` : 'Sync'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* + Add Entry Button */}
-            <TouchableOpacity
-              style={[styles.addEntryBtn, { backgroundColor: colors.primary, paddingHorizontal: 12 }]}
-              onPress={onOpenAddEntry}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={15} color="#FFFFFF" style={{ marginRight: 2 }} />
-              <Text style={[styles.addEntryText, { fontSize: 12 }]}>Add</Text>
-            </TouchableOpacity>
           </View>
         </View>
       )}
