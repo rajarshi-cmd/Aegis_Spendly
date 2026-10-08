@@ -391,6 +391,49 @@ export async function deleteTransactionRow(db: DatabaseExecutor, id: string): Pr
   await db.run(`DELETE FROM transactions WHERE id = ?;`, [id]);
 }
 
+export async function updateTransactionRow(
+  db: DatabaseExecutor,
+  id: string,
+  updates: Partial<Transaction>
+): Promise<void> {
+  const fields: string[] = [];
+  const values: any[] = [];
+
+  if (updates.account_id !== undefined) {
+    fields.push('account_id = ?');
+    values.push(updates.account_id);
+  }
+  if (updates.type !== undefined) {
+    fields.push('type = ?');
+    values.push(updates.type);
+  }
+  if (updates.amount !== undefined) {
+    fields.push('amount = ?');
+    values.push(updates.amount);
+  }
+  if (updates.category !== undefined) {
+    fields.push('category = ?');
+    values.push(updates.category);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.timestamp !== undefined) {
+    fields.push('timestamp = ?');
+    values.push(updates.timestamp);
+  }
+  if (updates.reference_number !== undefined) {
+    fields.push('reference_number = ?');
+    values.push(updates.reference_number);
+  }
+
+  if (fields.length === 0) return;
+
+  values.push(id);
+  await db.run(`UPDATE transactions SET ${fields.join(', ')} WHERE id = ?;`, values);
+}
+
 // --- DEBTS & BILATERAL OBLIGATIONS ---
 
 export async function getAllDebts(db: DatabaseExecutor): Promise<Debt[]> {

@@ -20,7 +20,8 @@ export class UpcomingEngine {
   public static async payRecurringObligation(
     db: DatabaseExecutor,
     obligationId: string,
-    paymentDateIso: string = new Date().toISOString()
+    paymentDateIso: string = new Date().toISOString(),
+    customAmount?: number
   ): Promise<{ obligation: RecurringObligation; transaction: Transaction }> {
     return await db.withTransaction(async () => {
       const obligation = await getObligationById(db, obligationId);
@@ -36,8 +37,9 @@ export class UpcomingEngine {
         throw new Error(`Obligation ${obligation.name} has no remaining installments.`);
       }
 
-      if (typeof obligation.amount !== 'number' || !Number.isFinite(obligation.amount) || obligation.amount <= 0) {
-        throw new Error(`Invalid recurring obligation amount: ${obligation.amount}`);
+      const effectiveAmount = customAmount !== undefined ? customAmount : obligation.amount;
+      if (typeof effectiveAmount !== 'number' || !Number.isFinite(effectiveAmount) || effectiveAmount <= 0) {
+        throw new Error('Payment amount must be strictly greater than zero. 0 cannot be entered.');
       }
 
       const linkedAccount = await getAccountById(db, obligation.linked_account_id);
@@ -45,12 +47,11 @@ export class UpcomingEngine {
         throw new Error(`Linked account not found: ${obligation.linked_account_id}`);
       }
 
-
       // 1. Calculate mutated balance on linked account
       const newBalance = AccountingEngine.calculateNewBalance(
         linkedAccount,
         'OUTFLOW',
-        obligation.amount
+        effectiveAmount
       );
       await updateAccountBalance(db, linkedAccount.id, newBalance);
 
@@ -67,7 +68,7 @@ export class UpcomingEngine {
         id: txId,
         account_id: linkedAccount.id,
         type: 'OUTFLOW',
-        amount: obligation.amount,
+        amount: effectiveAmount,
         category: txCategory,
         description: `${obligation.name} (${obligation.type})`,
         timestamp: paymentDateIso,

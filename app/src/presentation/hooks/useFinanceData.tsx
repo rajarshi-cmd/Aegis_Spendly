@@ -63,6 +63,7 @@ import {
   CreateInvestmentInput,
 } from '../../core/types';
 import { PlannedBudget } from '../../core/types/upcoming';
+import { kvStorage } from '../../core/storage/kvStorage';
 
 interface PortfolioMetrics {
   totalInvested: number;
@@ -84,6 +85,19 @@ const DEFAULT_BUDGETS: PlannedBudget[] = [
   { id: 'b-4', category: 'Shopping', planned_amount: 6000 },
   { id: 'b-5', category: 'Entertainment', planned_amount: 2500 },
 ];
+
+const PLANNED_BUDGETS_STORAGE_KEY = 'aegis_planned_budgets';
+
+function loadStoredBudgets(): PlannedBudget[] {
+  try {
+    const raw = kvStorage.getItem(PLANNED_BUDGETS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return DEFAULT_BUDGETS;
+}
 
 export interface FinanceDataContextType {
   accounts: Account[];
@@ -111,6 +125,7 @@ export interface FinanceDataContextType {
   setActiveMonth: (month: string) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   addTransaction: (input: CreateTransactionInput) => Promise<Transaction>;
+  editTransaction: (id: string, updates: Partial<Transaction>) => Promise<Transaction>;
   deleteTransaction: (id: string) => Promise<void>;
   restoreTransaction: (id: string) => Promise<void>;
   permanentDeleteTransaction: (id: string) => Promise<void>;
@@ -126,7 +141,7 @@ export interface FinanceDataContextType {
   removeObligation: (id: string) => Promise<void>;
   restoreCommitment: (id: string) => void;
   permanentDeleteCommitment: (id: string) => void;
-  payObligation: (id: string) => Promise<void>;
+  payObligation: (id: string, customAmount?: number) => Promise<void>;
   undoPayObligation: (id: string) => Promise<void>;
   skipObligation: (id: string) => void;
   undoSkipObligation: (id: string) => void;
@@ -146,6 +161,7 @@ export interface FinanceDataContextType {
   sealMonth: () => void;
   unsealMonth: () => void;
   addPlannedBudget: (budget: Omit<PlannedBudget, 'id'>) => void;
+  updatePlannedBudget: (id: string, planned_amount: number) => void;
   generatePdfReport: (period: DateRange) => Promise<string>;
   syncConfig: SyncScheduleConfig;
   updateSyncConfig: (partial: Partial<SyncScheduleConfig>) => void;
@@ -180,7 +196,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [obligations, setObligations] = useState<RecurringObligation[]>([]);
   const [pastCommitments, setPastCommitments] = useState<RecurringObligation[]>([]);
   const [investments, setInvestments] = useState<InvestmentAsset[]>([]);
-  const [plannedBudgets, setPlannedBudgets] = useState<PlannedBudget[]>(DEFAULT_BUDGETS);
+  const [plannedBudgets, setPlannedBudgets] = useState<PlannedBudget[]>(loadStoredBudgets);
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     return loadUserProfile() || DEFAULT_PROFILE;
   });
@@ -268,6 +284,13 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const newTx = await AccountingEngine.ingestTransaction(db, input);
     await loadData();
     return newTx;
+  };
+
+  const editTransaction = async (id: string, updates: Partial<Transaction>): Promise<Transaction> => {
+    const db = await getDatabase();
+    const updated = await AccountingEngine.updateTransaction(db, id, updates);
+    await loadData();
+    return updated;
   };
 
   const deleteTransaction = async (id: string): Promise<void> => {
@@ -415,7 +438,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setSnoozedObligationIds((prev) => ({ ...prev, [id]: true }));
   };
 
-  const payObligation = async (id: string): Promise<void> => {
+  const payObligation = async (id: string, customAmount?: number): Promise<void> => {
     setPaidObligationIds((prev) => ({ ...prev, [id]: true }));
     setSkippedObligationIds((prev) => {
       const copy = { ...prev };
@@ -429,7 +452,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
 
     const db = await getDatabase();
-    const result = await UpcomingEngine.payRecurringObligation(db, id);
+    const result = await UpcomingEngine.payRecurringObligation(db, id, new Date().toISOString(), customAmount);
     if (result.transaction) {
       setObligationTxMap((prev) => ({ ...prev, [id]: result.transaction.id }));
     }
@@ -617,7 +640,23 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const addPlannedBudget = (b: Omit<PlannedBudget, 'id'>) => {
-    setPlannedBudgets((prev) => [...prev, { ...b, id: generateUUID() }]);
+    setPlannedBudgets((prev) => {
+      const next = [...prev, { ...b, id: generateUUID() }];
+      try {
+        kvStorage.setItem(PLANNED_BUDGETS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const updatePlannedBudget = (id: string, planned_amount: number) => {
+    setPlannedBudgets((prev) => {
+      const next = prev.map((b) => (b.id === id ? { ...b, planned_amount } : b));
+      try {
+        kvStorage.setItem(PLANNED_BUDGETS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const generatePdfReport = async (period: DateRange): Promise<string> => {
@@ -744,6 +783,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setActiveMonth,
         updateProfile,
         addTransaction,
+        editTransaction,
         deleteTransaction,
         restoreTransaction,
         permanentDeleteTransaction,
@@ -779,6 +819,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         sealMonth,
         unsealMonth,
         addPlannedBudget,
+        updatePlannedBudget,
         generatePdfReport,
         syncConfig,
         updateSyncConfig,

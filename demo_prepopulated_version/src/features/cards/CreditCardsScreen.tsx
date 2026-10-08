@@ -5,7 +5,7 @@ import { useTheme } from '../../presentation/theme';
 import { useFinanceData } from '../../presentation/hooks/useFinanceData';
 import { Account } from '../../core/types/accounts';
 import { formatRupee } from '../../core/utils/currency';
-import { safeFormatDate } from '../../core/utils/date';
+import { safeFormatDate, isDateInMonth } from '../../core/utils/date';
 
 interface CreditCardsScreenProps {
   onOpenAddCard: () => void;
@@ -17,7 +17,7 @@ export const CreditCardsScreen: React.FC<CreditCardsScreenProps> = ({
   onEditCard,
 }) => {
   const { colors } = useTheme();
-  const { accounts, transactions, obligations, paidObligationIds, payObligation } = useFinanceData();
+  const { accounts, transactions, obligations, paidObligationIds, payObligation, activeMonth } = useFinanceData();
 
   // State for expanded card (null = master overview, cardId = expanded detail)
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -54,11 +54,15 @@ export const CreditCardsScreen: React.FC<CreditCardsScreenProps> = ({
     return creditCards.find((c) => c.id === selectedCardId) || creditCards[0] || null;
   }, [creditCards, selectedCardId]);
 
-  // Selected card's transactions
+  // Selected card's transactions (DEF-019: Filtered by activeMonth)
   const cardTxs = useMemo(() => {
     if (!selectedCard) return [];
-    return transactions.filter((t) => t.account_id === selectedCard.id);
-  }, [transactions, selectedCard]);
+    return transactions.filter((t) => {
+      if (t.account_id !== selectedCard.id) return false;
+      if (!activeMonth || activeMonth.toLowerCase() === 'all months') return true;
+      return isDateInMonth(t.timestamp, activeMonth);
+    });
+  }, [transactions, selectedCard, activeMonth]);
 
   // Filtered transactions for Column 1
   const filteredTxs = useMemo(() => {

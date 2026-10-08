@@ -34,6 +34,7 @@ interface AuthSecurityContextType {
   unlockWithPin: (pin: string) => Promise<boolean>;
   verifyCurrentPin: (pin: string) => Promise<boolean>;
   completeOnboarding: (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => void;
+  recordUserActivity: () => void;
   lockSession: () => void;
   signOut: () => void;
   deleteVault: () => Promise<void>;
@@ -106,8 +107,11 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, []);
 
-  // Reset and restart the inactivity timer based on user config
-  const resetIdleTimer = useCallback(() => {
+  const lastActivityTimeRef = useRef<number>(Date.now());
+
+  // Record user interaction and reset inactivity timer
+  const recordUserActivity = useCallback(() => {
+    lastActivityTimeRef.current = Date.now();
     if (idleTimerRef.current) {
       clearTimeout(idleTimerRef.current);
     }
@@ -115,7 +119,13 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (authStatus === 'UNLOCKED' && config.inactivityTimeoutMinutes > 0) {
       const timeoutMs = config.inactivityTimeoutMinutes * 60 * 1000;
       idleTimerRef.current = setTimeout(() => {
-        lockSession();
+        const elapsed = Date.now() - lastActivityTimeRef.current;
+        if (elapsed >= timeoutMs) {
+          lockSession();
+        } else {
+          const remainingMs = Math.max(1000, timeoutMs - elapsed);
+          idleTimerRef.current = setTimeout(lockSession, remainingMs);
+        }
       }, timeoutMs);
     }
   }, [authStatus, config.inactivityTimeoutMinutes, lockSession]);
@@ -167,10 +177,10 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    resetIdleTimer();
+    recordUserActivity();
 
     const handleUserActivity = () => {
-      resetIdleTimer();
+      recordUserActivity();
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -189,7 +199,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, [authStatus, resetIdleTimer]);
+  }, [authStatus, recordUserActivity]);
 
   const signInWithGoogle = useCallback(async (customDetails?: Partial<AuthUser>) => {
     const existing = loadAuthSession();
@@ -398,6 +408,7 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
         unlockWithPin,
         verifyCurrentPin,
         completeOnboarding,
+        recordUserActivity,
         lockSession,
         signOut,
         deleteVault,

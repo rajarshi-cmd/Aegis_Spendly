@@ -1,20 +1,31 @@
 {
   "expo": {
-    "name": "Aegis Finance",
-    "slug": "aegis-finance",
-    "version": "1.0.2",
+    "name": "Aegis Spendly",
+    "slug": "aegis-spendly",
+    "scheme": "spendly",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#090D16"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aegis.finance"
+      "bundleIdentifier": "com.aegis.spendly"
     },
     "android": {
-      "package": "com.aegis.finance",
+      "package": "com.aegis.spendly",
+      "versionCode": 4,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#090D16",

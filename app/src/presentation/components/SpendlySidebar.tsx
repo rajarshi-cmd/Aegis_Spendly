@@ -34,7 +34,7 @@ export const SpendlySidebar: React.FC<SpendlySidebarProps> = ({
     badge?: number;
   }[] = [
     { key: 'OVERVIEW', label: 'Overview', icon: 'grid-outline' },
-    { key: 'TRANSACTIONS', label: 'Transactions', icon: 'list-outline', badge: transactionCount },
+    { key: 'TRANSACTIONS', label: 'Transactions', icon: 'list-outline' },
     { key: 'CREDIT_CARDS', label: 'Credit cards', icon: 'card-outline' },
     { key: 'BANKS', label: 'Banks', icon: 'business-outline' },
     { key: 'PLAN_AHEAD', label: 'Plan ahead', icon: 'calendar-outline' },

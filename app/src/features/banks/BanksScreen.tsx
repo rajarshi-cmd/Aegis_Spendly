@@ -5,7 +5,7 @@ import { useTheme } from '../../presentation/theme';
 import { useFinanceData } from '../../presentation/hooks/useFinanceData';
 import { Account } from '../../core/types/accounts';
 import { formatRupee } from '../../core/utils/currency';
-import { safeFormatDate } from '../../core/utils/date';
+import { safeFormatDate, isDateInMonth } from '../../core/utils/date';
 
 interface BanksScreenProps {
   onOpenAddBank: () => void;
@@ -25,6 +25,7 @@ export const BanksScreen: React.FC<BanksScreenProps> = ({
     paidObligationIds,
     payObligation,
     executeSip,
+    activeMonth,
   } = useFinanceData();
 
   // State for expanded bank (null = master overview, bankId = expanded detail)
@@ -77,11 +78,15 @@ export const BanksScreen: React.FC<BanksScreenProps> = ({
     return bankAccounts.find((b) => b.id === selectedBankId) || bankAccounts[0] || null;
   }, [bankAccounts, selectedBankId]);
 
-  // Selected bank's transactions
+  // Selected bank's transactions (DEF-019: Filtered by activeMonth)
   const bankTxs = useMemo(() => {
     if (!selectedBank) return [];
-    return transactions.filter((t) => t.account_id === selectedBank.id);
-  }, [transactions, selectedBank]);
+    return transactions.filter((t) => {
+      if (t.account_id !== selectedBank.id) return false;
+      if (!activeMonth || activeMonth.toLowerCase() === 'all months') return true;
+      return isDateInMonth(t.timestamp, activeMonth);
+    });
+  }, [transactions, selectedBank, activeMonth]);
 
   // Filtered transactions for Column 1
   const filteredTxs = useMemo(() => {

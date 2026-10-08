@@ -69,16 +69,14 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
     }
   };
 
-  const MONTH_OPTIONS = [
-    { label: 'All Months', value: 'All Months', description: 'View full history', isAll: true },
-    { label: 'August 2026', value: 'August 2026', tag: 'Past' },
-    { label: 'September 2026', value: 'September 2026', tag: 'Past' },
-    { label: 'October 2026', value: 'October 2026', tag: 'Current' },
-    { label: 'November 2026', value: 'November 2026', tag: 'Next Cycle' },
-    { label: 'December 2026', value: 'December 2026', tag: 'Future' },
-    { label: 'January 2027', value: 'January 2027', tag: 'Future' },
-    { label: 'February 2027', value: 'February 2027', tag: 'Future' },
-    { label: 'March 2027', value: 'March 2027', tag: 'Future' },
+  const [pickerYear, setPickerYear] = useState<number>(() => {
+    const match = (activeMonth || '').match(/\d{4}/);
+    return match ? parseInt(match[0], 10) : new Date().getFullYear();
+  });
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const handleSelectMonth = (monthVal: string) => {
@@ -631,102 +629,123 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
               Inspect historical records in past months, current ledger movements, or forecast upcoming commitment tenures.
             </Text>
 
-            {/* Scrollable Month Options List */}
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              {MONTH_OPTIONS.map((m) => {
-                const isSelected = activeMonth === m.value;
-                const count = getMonthCount(m.value);
-
-                return (
-                  <TouchableOpacity
-                    key={m.value}
+            {/* Quick Option: All Months */}
+            <TouchableOpacity
+              style={[
+                styles.monthOptionRow,
+                {
+                  backgroundColor: activeMonth === 'All Months' ? colors.primaryLight : 'transparent',
+                  borderColor: activeMonth === 'All Months' ? colors.primary : colors.borderSubtle,
+                  marginBottom: 10,
+                },
+              ]}
+              onPress={() => handleSelectMonth('All Months')}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <View
+                  style={[
+                    styles.monthOptionIconBox,
+                    { backgroundColor: activeMonth === 'All Months' ? colors.primary : '#EEF2FF' },
+                  ]}
+                >
+                  <Ionicons
+                    name="infinite"
+                    size={16}
+                    color={activeMonth === 'All Months' ? '#FFFFFF' : colors.primary}
+                  />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text
                     style={[
-                      styles.monthOptionRow,
-                      {
-                        backgroundColor: isSelected ? colors.primaryLight : 'transparent',
-                        borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                      },
+                      styles.monthOptionTitle,
+                      { color: activeMonth === 'All Months' ? colors.primary : colors.textPrimary },
                     ]}
-                    onPress={() => handleSelectMonth(m.value)}
-                    activeOpacity={0.7}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <View
-                        style={[
-                          styles.monthOptionIconBox,
-                          {
-                            backgroundColor: isSelected
-                              ? colors.primary
-                              : m.isAll
-                              ? '#EEF2FF'
-                              : '#F1F5F9',
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={m.isAll ? 'infinite' : 'calendar-outline'}
-                          size={15}
-                          color={isSelected ? '#FFFFFF' : colors.textSecondary}
-                        />
-                      </View>
+                    All Months
+                  </Text>
+                  <Text style={[styles.monthOptionSub, { color: colors.textMuted }]}>
+                    View all-time transactions ({transactions.length})
+                  </Text>
+                </View>
+              </View>
+              {activeMonth === 'All Months' && (
+                <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+              )}
+            </TouchableOpacity>
 
-                      <View style={{ marginLeft: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text
-                            style={[
-                              styles.monthOptionTitle,
-                              {
-                                color: isSelected ? colors.primary : colors.textPrimary,
-                                fontWeight: isSelected ? '700' : '600',
-                              },
-                            ]}
-                          >
-                            {m.label}
-                          </Text>
-                          {m.tag && (
-                            <View
-                              style={[
-                                styles.monthTagPill,
-                                {
-                                  backgroundColor:
-                                    m.tag === 'Current'
-                                      ? '#DCFCE7'
-                                      : m.tag === 'Next Cycle'
-                                      ? '#FEF3C7'
-                                      : '#F1F5F9',
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.monthTagText,
-                                  {
-                                    color:
-                                      m.tag === 'Current'
-                                        ? '#15803D'
-                                        : m.tag === 'Next Cycle'
-                                        ? '#B45309'
-                                        : colors.textMuted,
-                                  },
-                                ]}
-                              >
-                                {m.tag}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={[styles.monthOptionSub, { color: colors.textMuted }]}>
-                          {count === 0 ? 'No recorded transactions' : `${count} transaction${count === 1 ? '' : 's'}`}
+            {/* Year Selector Navigation Bar */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                backgroundColor: colors.background,
+                borderRadius: 10,
+                marginBottom: 10,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setPickerYear((y) => y - 1)}
+                style={{ padding: 6, borderRadius: 6 }}
+              >
+                <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
+                {pickerYear}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPickerYear((y) => y + 1)}
+                style={{ padding: 6, borderRadius: 6 }}
+              >
+                <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* 12 Months Grid */}
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {MONTH_NAMES.map((mName) => {
+                  const val = `${mName} ${pickerYear}`;
+                  const isSelected = activeMonth === val;
+                  const count = getMonthCount(val);
+                  return (
+                    <TouchableOpacity
+                      key={val}
+                      style={{
+                        width: '48.5%',
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                        backgroundColor: isSelected ? colors.primaryLight : colors.surface,
+                      }}
+                      onPress={() => handleSelectMonth(val)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? '700' : '600',
+                            color: isSelected ? colors.primary : colors.textPrimary,
+                          }}
+                        >
+                          {mName.slice(0, 3)}
                         </Text>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
+                        )}
                       </View>
-                    </View>
-
-                    {isSelected && (
-                      <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 3 }}>
+                        {count === 0 ? '0 txs' : `${count} tx${count === 1 ? '' : 's'}`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
           </View>
         </View>

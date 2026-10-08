@@ -5,6 +5,7 @@ import { useTheme } from '../../presentation/theme';
 import { useFinanceData } from '../../presentation/hooks/useFinanceData';
 import { formatRupee, formatCompactRupee } from '../../core/utils/currency';
 import { safeFormatDate, isDateInMonth } from '../../core/utils/date';
+import { Transaction } from '../../core/types/transactions';
 
 interface OverviewScreenProps {
   onNavigateToTransactions: () => void;
@@ -18,10 +19,39 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   onOpenAddEntry,
 }) => {
   const { colors } = useTheme();
-  const { accounts, transactions, totalBankCash, totalCreditDebt, obligations, activeMonth } = useFinanceData();
+  const {
+    accounts,
+    transactions,
+    totalBankCash,
+    totalCreditDebt,
+    obligations,
+    activeMonth,
+    setActiveMonth,
+  } = useFinanceData();
 
   // Selected category slice for interactive donut hover/tap
   const [selectedCat, setSelectedCat] = useState<{ cat: string; pct: number; amt: number; color: string } | null>(null);
+
+  // Helper to identify Opening Balances (DEF-010)
+  const isOpeningBalance = (t: Transaction) => {
+    const cat = (t.category || '').toLowerCase();
+    const desc = (t.description || '').toLowerCase();
+    return cat === 'opening balance' || desc.includes('opening');
+  };
+
+  const isSavingsTx = (t: Transaction) => {
+    const cat = (t.category || '').toLowerCase();
+    const desc = (t.description || '').toLowerCase();
+    return (
+      cat.includes('saving') ||
+      cat.includes('invest') ||
+      desc.includes('sip') ||
+      desc.includes('saving') ||
+      desc.includes('invest') ||
+      isOpeningBalance(t) ||
+      t.type === 'TRANSFER'
+    );
+  };
 
   // Month-filtered transactions
   const currentMonthTransactions = useMemo(() => {
@@ -31,14 +61,18 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
     return transactions.filter((t) => isDateInMonth(t.timestamp, activeMonth));
   }, [transactions, activeMonth]);
 
-  // Calculations for selected active month
-  const totalIncome = currentMonthTransactions
-    .filter((t) => t.type === 'INFLOW')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Calculations for selected active month (DEF-010: exclude opening balances from income and expenses)
+  const totalIncome = useMemo(() => {
+    return currentMonthTransactions
+      .filter((t) => t.type === 'INFLOW' && !isOpeningBalance(t))
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [currentMonthTransactions]);
 
-  const totalExpenses = currentMonthTransactions
-    .filter((t) => t.type === 'OUTFLOW')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalExpenses = useMemo(() => {
+    return currentMonthTransactions
+      .filter((t) => t.type === 'OUTFLOW' && !isSavingsTx(t) && !isOpeningBalance(t))
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [currentMonthTransactions]);
 
   const availableThisMonth = totalBankCash > 0 ? totalBankCash : Math.max(0, totalIncome - totalExpenses);
   const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100) : 0;
@@ -46,38 +80,79 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   // Credit card for quick cycle widget
   const regaliaCard = accounts.find((a) => a.type === 'CREDIT_CARD') || accounts[0];
   const cardLimit = regaliaCard?.credit_limit || 52000;
-  const cardDebt = regaliaCard?.balance || 8420;
-  const cardUtil = Math.round((cardDebt / cardLimit) * 1000) / 10;
+  const cardDebt = regaliaCard?.balance || 0;
+  const cardUtil = cardLimit > 0 ? Math.round((cardDebt / cardLimit) * 1000) / 10 : 0;
 
-  // 12 Months bar chart mock amounts
-  const monthsData = [
-    { m: 'Nov', val: 14200 },
-    { m: 'Dec', val: 16800 },
-    { m: 'Jan', val: 15400 },
-    { m: 'Feb', val: 21000 },
-    { m: 'Mar', val: 17500 },
-    { m: 'Apr', val: 19200 },
-    { m: 'May', val: 22800 },
-    { m: 'Jun', val: 18100 },
-    { m: 'Jul', val: 16500 },
-    { m: 'Aug', val: 20400 },
-    { m: 'Sep', val: 19500 },
-    { m: 'Oct', val: 18600, current: true },
-  ];
-
-  const maxVal = Math.max(...monthsData.map((d) => d.val));
-
-  // Category breakdown
-  const categoryBreakdown = useMemo(() => {
-    return [
-      { cat: 'Food & drinks', pct: 28, amt: 5140, color: '#F59E0B' },
-      { cat: 'Home', pct: 23, amt: 4220, color: '#10B981' },
-      { cat: 'Shopping', pct: 19, amt: 3480, color: '#8B5CF6' },
-      { cat: 'Transport', pct: 16, amt: 2940, color: '#0284C7' },
-      { cat: 'Other', pct: 14, amt: 2600, color: '#94A3B8' },
-      { cat: 'Investments saved', pct: 0, amt: 0, color: '#0F4C3A' },
+  // Real 12 Months bar chart data (DEF-014 & DEF-019)
+  const monthsData = useMemo(() => {
+    const activeYear = parseInt((activeMonth || '').match(/\d{4}/)?.[0] || new Date().getFullYear().toString(), 10);
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
-  }, []);
+    const monthShorts = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    return monthNames.map((name, idx) => {
+      const fullMonthName = `${name} ${activeYear}`;
+      const shortName = monthShorts[idx];
+      const monthExpenses = transactions
+        .filter((t) =>
+          t.type === 'OUTFLOW' &&
+          !isSavingsTx(t) &&
+          !isOpeningBalance(t) &&
+          isDateInMonth(t.timestamp, fullMonthName)
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const isCurrent = activeMonth === fullMonthName;
+      return {
+        m: shortName,
+        fullName: fullMonthName,
+        val: monthExpenses,
+        current: isCurrent,
+      };
+    });
+  }, [transactions, activeMonth]);
+
+  const maxVal = Math.max(1, ...monthsData.map((d) => d.val));
+
+  // Category breakdown computed strictly from real transactions (DEF-013)
+  const categoryBreakdown = useMemo(() => {
+    const expenseTxs = currentMonthTransactions.filter(
+      (t) => t.type === 'OUTFLOW' && !isSavingsTx(t) && !isOpeningBalance(t)
+    );
+    const catTotals: Record<string, number> = {};
+    let sum = 0;
+
+    expenseTxs.forEach((t) => {
+      const c = t.category || 'Other';
+      catTotals[c] = (catTotals[c] || 0) + t.amount;
+      sum += t.amount;
+    });
+
+    if (sum === 0) return [];
+
+    const categoryColors: Record<string, string> = {
+      'Food & drinks': '#F59E0B',
+      'Home': '#10B981',
+      'Shopping': '#8B5CF6',
+      'Transport': '#0284C7',
+      'Bills & utilities': '#EF4444',
+      'Entertainment': '#EC4899',
+      'Investments': '#059669',
+      'Other': '#94A3B8',
+    };
+    const fallbackColors = ['#F59E0B', '#10B981', '#8B5CF6', '#0284C7', '#EF4444', '#EC4899', '#059669', '#94A3B8'];
+
+    return Object.entries(catTotals)
+      .map(([cat, amt], idx) => ({
+        cat,
+        amt,
+        pct: Math.round((amt / sum) * 100),
+        color: categoryColors[cat] || fallbackColors[idx % fallbackColors.length],
+      }))
+      .sort((a, b) => b.amt - a.amt);
+  }, [currentMonthTransactions]);
 
   // Compute CSS conic gradient for real pie/donut slices
   const conicGradient = useMemo(() => {
@@ -119,87 +194,76 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             <Ionicons name="wallet-outline" size={16} color={colors.primary} />
           </View>
           <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{formatRupee(availableThisMonth)}</Text>
-          <Text style={[styles.kpiSub, { color: colors.successText }]}>↗ 12.8% vs last month</Text>
+          <Text style={[styles.kpiSub, { color: colors.successText }]}>Bank cash & liquid reserves</Text>
         </View>
 
-        {/* Total Income */}
+        {/* Total Income (DEF-010: real income only) */}
         <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
           <View style={styles.kpiTop}>
             <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>TOTAL INCOME</Text>
             <Ionicons name="cash-outline" size={16} color={colors.success} />
           </View>
           <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>
-            {formatRupee(totalIncome > 0 ? totalIncome : 148000)}
+            {formatRupee(totalIncome)}
           </Text>
-          <Text style={[styles.kpiSub, { color: colors.textSecondary }]}>↗ 8.4% salary + side income</Text>
+          <Text style={[styles.kpiSub, { color: colors.textSecondary }]}>Salary, credits & earnings</Text>
         </View>
 
-        {/* Total Expenses */}
+        {/* Total Expenses (DEF-010: real expenses only) */}
         <View style={[styles.kpiCard, { backgroundColor: colors.cardCream, borderColor: colors.cardCreamBorder }]}>
           <View style={styles.kpiTop}>
             <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>TOTAL EXPENSES</Text>
-            <Ionicons name="bar-chart-outline" size={16} color={colors.warning} />
+            <Ionicons name="arrow-up-circle-outline" size={16} color={colors.danger} />
           </View>
           <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>
-            {formatRupee(totalExpenses > 0 ? totalExpenses : 18600)}
+            {formatRupee(totalExpenses)}
           </Text>
-          <Text style={[styles.kpiSub, { color: colors.warningText }]}>-4.2% under your budget</Text>
+          <Text style={[styles.kpiSub, { color: colors.dangerText }]}>Outflows & card spends</Text>
         </View>
 
-        {/* Savings Rate */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.cardLavender, borderColor: colors.cardLavenderBorder }]}>
+        {/* Net Savings Rate */}
+        <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
           <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>SAVINGS RATE</Text>
-            <Ionicons name="trending-up-outline" size={16} color="#6D28D9" />
+            <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>SAVINGS RATE</Text>
+            <Ionicons name="pie-chart-outline" size={16} color={colors.primary} />
           </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{savingsRate || 87}%</Text>
-          <Text style={[styles.kpiSub, { color: '#6D28D9' }]}>↗ 6 pts better than Sep</Text>
-        </View>
-
-        {/* Investments Saved */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.cardIce, borderColor: colors.cardIceBorder }]}>
-          <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>INVESTMENTS SAVED</Text>
-            <Ionicons name="leaf-outline" size={16} color={colors.primary} />
-          </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>₹0</Text>
-          <Text style={[styles.kpiSub, { color: colors.primary }]}>↗ Savings, not an expense</Text>
+          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{savingsRate}%</Text>
+          <Text style={[styles.kpiSub, { color: colors.textMuted }]}>Net retained this month</Text>
         </View>
       </View>
 
-      {/* Middle Row: Spending Rhythm & Where it goes */}
+      {/* Middle Row: Monthly Expenses Bar Chart & Category Donut */}
       <View style={styles.twoColRow}>
-        {/* Spending Rhythm */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1.3 }]}>
+        {/* Monthly Expenses Chart (DEF-014 & DEF-019: Real data, clickable bars) */}
+        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1.4 }]}>
           <View style={styles.panelHeader}>
             <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>SPENDING RHYTHM</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Monthly expenses</Text>
+              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>MONTHLY EXPENSES</Text>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Real expense trends</Text>
             </View>
-            <View style={styles.panelActions}>
-              <TouchableOpacity style={[styles.actionIconBtn, { borderColor: colors.borderSubtle }]}>
-                <Ionicons name="download-outline" size={15} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <View style={[styles.filterDropdown, { borderColor: colors.borderSubtle }]}>
-                <Text style={[styles.filterDropdownText, { color: colors.textSecondary }]}>Last 12 months</Text>
-                <Ionicons name="chevron-down" size={12} color={colors.textMuted} style={{ marginLeft: 4 }} />
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 11, color: colors.textMuted }}>Tap bar to switch month</Text>
             </View>
           </View>
 
           <View style={styles.panelMetricRow}>
-            <Text style={[styles.panelBigNum, { color: colors.textPrimary }]}>{formatRupee(totalExpenses > 0 ? totalExpenses : 18600)}</Text>
-            <Text style={[styles.panelGrowthBadge, { color: colors.successText }]}>↗ 4.7% lower than your monthly average</Text>
+            <Text style={[styles.panelBigNum, { color: colors.textPrimary }]}>{formatRupee(totalExpenses)}</Text>
+            <Text style={[styles.panelGrowthBadge, { color: colors.textSecondary }]}>Expenses in {activeMonth}</Text>
           </View>
 
           {/* Bar Chart */}
           <View style={styles.chartContainer}>
             <View style={styles.barsRow}>
               {monthsData.map((d) => {
-                const heightPct = Math.max(15, Math.round((d.val / maxVal) * 110));
+                const heightPct = d.val > 0 ? Math.max(16, Math.round((d.val / maxVal) * 110)) : 6;
                 return (
-                  <View key={d.m} style={styles.barCol}>
-                    {d.current && (
+                  <TouchableOpacity
+                    key={d.fullName}
+                    style={styles.barCol}
+                    onPress={() => setActiveMonth(d.fullName)}
+                    activeOpacity={0.7}
+                  >
+                    {d.current && d.val > 0 && (
                       <Text style={[styles.barTopLabel, { color: colors.warningText }]}>
                         {formatCompactRupee(d.val)}
                       </Text>
@@ -209,7 +273,11 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                         styles.barFill,
                         {
                           height: heightPct,
-                          backgroundColor: d.current ? '#F59E0B' : '#D1FAE5',
+                          backgroundColor: d.current
+                            ? '#F59E0B'
+                            : d.val > 0
+                            ? '#D1FAE5'
+                            : '#E2E8F0',
                         },
                       ]}
                     />
@@ -222,120 +290,128 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
                     >
                       {d.m}
                     </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        {/* Where it Goes (Category Donut & Legend) */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
-          <View style={styles.panelHeader}>
-            <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>WHERE IT GOES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Spend & save by category</Text>
-            </View>
-            <TouchableOpacity style={[styles.actionIconBtn, { borderColor: colors.borderSubtle }]}>
-              <Ionicons name="ellipsis-horizontal" size={15} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Visual Segmented Donut Ring Representation */}
-          <View style={styles.donutRow}>
-            <View
-              style={[
-                styles.donutRingBox,
-                {
-                  // @ts-ignore
-                  backgroundImage: conicGradient,
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.donutInnerHole,
-                  {
-                    backgroundColor: colors.surface,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.donutCenterAmount,
-                    { color: selectedCat ? selectedCat.color : colors.textPrimary },
-                  ]}
-                >
-                  {selectedCat ? formatCompactRupee(selectedCat.amt) : '₹18.6k'}
-                </Text>
-                <Text
-                  style={[
-                    styles.donutCenterLabel,
-                    { color: selectedCat ? colors.textPrimary : colors.textMuted },
-                    selectedCat && { fontWeight: '700' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {selectedCat ? `${selectedCat.pct}% ${selectedCat.cat}` : 'expenses'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Legend Column with Interactive Taps */}
-            <View style={styles.legendCol}>
-              {categoryBreakdown.map((item) => {
-                const isSelected = selectedCat?.cat === item.cat;
-                return (
-                  <TouchableOpacity
-                    key={item.cat}
-                    onPress={() => setSelectedCat(isSelected ? null : item)}
-                    style={[
-                      styles.legendItem,
-                      isSelected && {
-                        backgroundColor: '#F1F5F9',
-                        borderRadius: 6,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                    <Text
-                      style={[
-                        styles.legendName,
-                        { color: isSelected ? colors.textPrimary : colors.textSecondary },
-                        isSelected && { fontWeight: '700' },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.cat}
-                    </Text>
-                    <Text style={[styles.legendPct, { color: colors.textMuted }]}>{item.pct}%</Text>
-                    <Text
-                      style={[
-                        styles.legendAmt,
-                        { color: isSelected ? item.color : colors.textPrimary },
-                      ]}
-                    >
-                      {formatCompactRupee(item.amt)}
-                    </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         </View>
+
+        {/* Where it Goes (Category Donut & Legend - DEF-013) */}
+        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
+          <View style={styles.panelHeader}>
+            <View>
+              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>WHERE IT GOES</Text>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Spend by category</Text>
+            </View>
+          </View>
+
+          {categoryBreakdown.length === 0 ? (
+            <View style={{ padding: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="pie-chart-outline" size={40} color={colors.textMuted} style={{ marginBottom: 8 }} />
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary }}>
+                No expenses in {activeMonth}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
+                Debit transactions you log will automatically generate your category breakdown here.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.donutRow}>
+              <View
+                style={[
+                  styles.donutRingBox,
+                  {
+                    // @ts-ignore
+                    backgroundImage: conicGradient,
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.donutInnerHole,
+                    {
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.donutCenterAmount,
+                      { color: selectedCat ? selectedCat.color : colors.textPrimary },
+                    ]}
+                  >
+                    {selectedCat ? formatCompactRupee(selectedCat.amt) : formatCompactRupee(totalExpenses)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.donutCenterLabel,
+                      { color: selectedCat ? colors.textPrimary : colors.textMuted },
+                      selectedCat && { fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedCat ? `${selectedCat.pct}% ${selectedCat.cat}` : 'expenses'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Legend Column with Interactive Taps */}
+              <View style={styles.legendCol}>
+                {categoryBreakdown.map((item) => {
+                  const isSelected = selectedCat?.cat === item.cat;
+                  return (
+                    <TouchableOpacity
+                      key={item.cat}
+                      onPress={() => setSelectedCat(isSelected ? null : item)}
+                      style={[
+                        styles.legendItem,
+                        isSelected && {
+                          backgroundColor: '#F1F5F9',
+                          borderRadius: 6,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                      <Text
+                        style={[
+                          styles.legendName,
+                          { color: isSelected ? colors.textPrimary : colors.textSecondary },
+                          isSelected && { fontWeight: '700' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.cat}
+                      </Text>
+                      <Text style={[styles.legendPct, { color: colors.textMuted }]}>{item.pct}%</Text>
+                      <Text
+                        style={[
+                          styles.legendAmt,
+                          { color: isSelected ? item.color : colors.textPrimary },
+                        ]}
+                      >
+                        {formatCompactRupee(item.amt)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Bottom Row: Latest Entries & Current Cycles */}
+      {/* Bottom Row: Latest Entries (DEF-018: monthFilteredTransactions) & Current Cycles */}
       <View style={styles.twoColRow}>
-        {/* Latest Entries */}
+        {/* Latest Entries for Active Month */}
         <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1.2 }]}>
           <View style={styles.panelHeader}>
             <View>
               <Text style={[styles.panelMicro, { color: colors.textMuted }]}>LATEST ENTRIES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Recent transactions</Text>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Recent transactions ({activeMonth})</Text>
             </View>
             <TouchableOpacity onPress={onNavigateToTransactions} style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={[styles.viewAllText, { color: colors.primary }]}>View all</Text>
@@ -344,137 +420,108 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           </View>
 
           <View style={styles.txList}>
-            {transactions.slice(0, 4).map((tx) => {
-              const isIncome = tx.type === 'INFLOW';
-              const acc = accounts.find((a) => a.id === tx.account_id);
-              return (
-                <View key={tx.id} style={[styles.txRow, { borderBottomColor: colors.borderSubtle }]}>
-                  <View
-                    style={[
-                      styles.txIconBox,
-                      { backgroundColor: isIncome ? colors.cardMint : '#FEE2E2' },
-                    ]}
-                  >
-                    <Ionicons
-                      name={isIncome ? 'cash-outline' : 'cafe-outline'}
-                      size={18}
-                      color={isIncome ? colors.successText : colors.dangerText}
-                    />
-                  </View>
-
-                  <View style={styles.txDetails}>
-                    <Text style={[styles.txTitle, { color: colors.textPrimary }]}>{tx.description || tx.category}</Text>
-                    <Text style={[styles.txSub, { color: colors.textMuted }]}>
-                      {tx.category} • {acc?.name || 'Account'}
-                    </Text>
-                  </View>
-
-                  <Text style={[styles.txDate, { color: colors.textMuted }]}>
-                    {safeFormatDate(tx.timestamp, 'en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
-                  </Text>
-
-                  <View style={styles.txAmountCol}>
-                    <Text
-                      style={[
-                        styles.txAmount,
-                        { color: isIncome ? colors.successText : colors.textPrimary },
-                      ]}
-                    >
-                      {formatRupee(tx.amount, true)}
-                    </Text>
+            {currentMonthTransactions.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: colors.textMuted }}>No movements recorded for {activeMonth}.</Text>
+              </View>
+            ) : (
+              currentMonthTransactions.slice(0, 4).map((tx) => {
+                const isIncome = tx.type === 'INFLOW';
+                const acc = accounts.find((a) => a.id === tx.account_id);
+                return (
+                  <View key={tx.id} style={[styles.txRow, { borderBottomColor: colors.borderSubtle }]}>
                     <View
                       style={[
-                        styles.txBadge,
-                        { backgroundColor: isIncome ? '#DCFCE7' : '#FEE2E2' },
+                        styles.txIconBox,
+                        { backgroundColor: isIncome ? colors.cardMint : '#FEE2E2' },
                       ]}
                     >
+                      <Ionicons
+                        name={isIncome ? 'cash-outline' : 'cafe-outline'}
+                        size={18}
+                        color={isIncome ? colors.successText : colors.dangerText}
+                      />
+                    </View>
+
+                    <View style={styles.txDetails}>
+                      <Text style={[styles.txTitle, { color: colors.textPrimary }]}>{tx.description || tx.category}</Text>
+                      <Text style={[styles.txSub, { color: colors.textMuted }]}>
+                        {tx.category} • {acc?.name || 'Account'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.txRight}>
                       <Text
                         style={[
-                          styles.txBadgeText,
-                          { color: isIncome ? '#15803D' : '#B91C1C' },
+                          styles.txAmount,
+                          { color: isIncome ? colors.successText : colors.textPrimary },
                         ]}
                       >
-                        {isIncome ? 'Credit' : 'Debit'}
+                        {isIncome ? '+' : '-'}{formatRupee(tx.amount)}
+                      </Text>
+                      <Text style={[styles.txDate, { color: colors.textMuted }]}>
+                        {safeFormatDate(tx.timestamp, 'en-IN', { month: 'short', day: '2-digit' })}
                       </Text>
                     </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </View>
 
-        {/* Current Cycles (Credit card usage) */}
+        {/* Current Billing Cycles */}
         <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
           <View style={styles.panelHeader}>
             <View>
               <Text style={[styles.panelMicro, { color: colors.textMuted }]}>CURRENT CYCLES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Credit card usage</Text>
+              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Upcoming dues</Text>
             </View>
             <TouchableOpacity onPress={onNavigateToCards} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>Manage</Text>
+              <Text style={[styles.viewAllText, { color: colors.primary }]}>View cards</Text>
               <Ionicons name="chevron-forward" size={13} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
-          {/* Card Cycle Card */}
-          <View style={[styles.cycleBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
+          <View style={styles.cycleCardBox}>
             <View style={styles.cycleTop}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={[styles.cardIconSmall, { backgroundColor: colors.cardMint }]}>
-                  <Ionicons name="card" size={16} color={colors.primary} />
-                </View>
-                <View style={{ marginLeft: 10 }}>
-                  <Text style={[styles.cycleCardName, { color: colors.textPrimary }]}>
-                    {regaliaCard?.name || 'HDFC Regalia'}
-                  </Text>
-                  <Text style={[styles.cycleCardDigits, { color: colors.textMuted }]}>
-                    •• {regaliaCard?.last4 || '4812'}
-                  </Text>
-                </View>
+              <View style={[styles.cardTag, { backgroundColor: colors.cardSkinEmerald }]}>
+                <Ionicons name="card-outline" size={14} color="#064E3B" style={{ marginRight: 4 }} />
+                <Text style={styles.cardTagText}>{regaliaCard?.name || 'Primary Card'}</Text>
               </View>
-              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
+              <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7' }]}>
+                <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>Healthy ({cardUtil}%)</Text>
+              </View>
             </View>
 
-            {/* Usage Progress Bar */}
-            <View style={{ marginTop: 14 }}>
-              <View style={styles.usageRow}>
-                <Text style={[styles.usageAmounts, { color: colors.textPrimary }]}>
-                  {formatRupee(cardDebt)} <Text style={{ color: colors.textMuted, fontSize: 12 }}>used of {formatRupee(cardLimit)}</Text>
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={[styles.statusDot, { backgroundColor: cardUtil > 30 ? colors.danger : cardUtil > 15 ? colors.warning : colors.success }]} />
-                  <Text
-                    style={[
-                      styles.utilBadgeText,
-                      { color: cardUtil > 30 ? colors.danger : cardUtil > 15 ? colors.warningText : colors.successText },
-                    ]}
-                  >
-                    {cardUtil}% • {cardUtil > 30 ? 'Attention' : cardUtil > 15 ? 'Watch' : 'Healthy'}
-                  </Text>
-                </View>
+            <View style={styles.cycleDetailsRow}>
+              <View>
+                <Text style={[styles.cycleDetailLabel, { color: colors.textMuted }]}>Current Balance</Text>
+                <Text style={[styles.cycleDetailVal, { color: colors.textPrimary }]}>{formatRupee(cardDebt)}</Text>
               </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.cycleDetailLabel, { color: colors.textMuted }]}>Credit Limit</Text>
+                <Text style={[styles.cycleDetailVal, { color: colors.textPrimary }]}>{formatRupee(cardLimit)}</Text>
+              </View>
+            </View>
 
-              <View style={[styles.progressTrack, { backgroundColor: colors.borderSubtle }]}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(100, cardUtil)}%`,
-                      backgroundColor: cardUtil > 30 ? colors.danger : cardUtil > 15 ? colors.warning : colors.success,
-                    },
-                  ]}
-                />
-              </View>
+            {/* Visual utilization bar */}
+            <View style={[styles.utilTrack, { backgroundColor: colors.borderSubtle }]}>
+              <View
+                style={[
+                  styles.utilFill,
+                  {
+                    width: `${Math.min(100, cardUtil)}%`,
+                    backgroundColor: cardUtil > 30 ? colors.danger : colors.primary,
+                  },
+                ]}
+              />
+            </View>
 
-              <View style={styles.cycleDatesRow}>
-                <Text style={[styles.cycleDateText, { color: colors.textMuted }]}>
-                  Bill generated {regaliaCard?.billing_cycle_cut_day || 10}th
-                </Text>
-                <Text style={[styles.cycleDateText, { color: colors.textMuted }]}>
-                  Due {regaliaCard?.payment_due_day || 25} Nov
-                </Text>
-              </View>
+            <View style={styles.cycleFooter}>
+              <Text style={[styles.cycleFooterText, { color: colors.textMuted }]}>
+                Billing cut: {regaliaCard?.billing_cycle_cut_day || 15}th • Due: {regaliaCard?.payment_due_day || 5}th
+              </Text>
             </View>
           </View>
         </View>
@@ -510,35 +557,33 @@ const styles = StyleSheet.create({
   kpiRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 16,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 160,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
   },
   kpiTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   kpiAmount: {
     fontSize: 22,
     fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 4,
+    marginTop: 8,
   },
   kpiSub: {
     fontSize: 11,
-    fontWeight: '500',
+    marginTop: 4,
   },
   twoColRow: {
     flexDirection: 'row',
@@ -546,54 +591,35 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   panelCard: {
-    padding: 20,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 14,
     borderWidth: 1,
-    flex: 1,
-    minWidth: 280,
   },
   panelHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   panelMicro: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   panelTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     marginTop: 2,
   },
-  panelActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  filterDropdownText: {
+  viewAllText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginRight: 2,
   },
   panelMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
     marginBottom: 16,
   },
   panelBigNum: {
@@ -601,33 +627,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   panelGrowthBadge: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
   },
   chartContainer: {
-    height: 150,
+    height: 140,
     justifyContent: 'flex-end',
-    paddingTop: 10,
   },
   barsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 130,
+    height: 120,
+    paddingTop: 16,
   },
   barCol: {
     alignItems: 'center',
     flex: 1,
+    justifyContent: 'flex-end',
+    height: '100%',
   },
   barTopLabel: {
     fontSize: 9,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   barFill: {
     width: 14,
     borderRadius: 4,
+    minHeight: 6,
   },
   barXLabel: {
     fontSize: 10,
@@ -636,18 +664,15 @@ const styles = StyleSheet.create({
   donutRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    flexWrap: 'wrap',
-    gap: 14,
+    gap: 20,
+    marginTop: 8,
   },
   donutRingBox: {
-    width: 124,
-    height: 124,
-    borderRadius: 62,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   donutInnerHole: {
     width: 82,
@@ -655,28 +680,29 @@ const styles = StyleSheet.create({
     borderRadius: 41,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 6,
   },
   donutCenterAmount: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   donutCenterLabel: {
-    fontSize: 10,
+    fontSize: 9,
+    marginTop: 1,
   },
   legendCol: {
     flex: 1,
-    paddingLeft: 20,
-    gap: 8,
+    gap: 7,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   legendDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
   },
   legendName: {
     fontSize: 12,
@@ -684,16 +710,14 @@ const styles = StyleSheet.create({
   },
   legendPct: {
     fontSize: 11,
-    marginRight: 10,
+    width: 32,
+    textAlign: 'right',
   },
   legendAmt: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  viewAllText: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginRight: 2,
+    width: 52,
+    textAlign: 'right',
   },
   txList: {
     gap: 4,
@@ -710,10 +734,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   txDetails: {
     flex: 1,
+    marginLeft: 12,
   },
   txTitle: {
     fontSize: 13,
@@ -723,86 +747,72 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-  txDate: {
-    fontSize: 11,
-    marginRight: 16,
-  },
-  txAmountCol: {
+  txRight: {
     alignItems: 'flex-end',
   },
   txAmount: {
     fontSize: 13,
     fontWeight: '700',
   },
-  txBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  txDate: {
+    fontSize: 11,
     marginTop: 2,
   },
-  txBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  cycleBox: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
+  cycleCardBox: {
+    gap: 12,
+    paddingTop: 4,
   },
   cycleTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardIconSmall: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cycleCardName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  cycleCardDigits: {
-    fontSize: 11,
-  },
-  usageRow: {
+  cardTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  usageAmounts: {
-    fontSize: 13,
+  cardTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#064E3B',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 4,
+  cycleDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
-  utilBadgeText: {
+  cycleDetailLabel: {
     fontSize: 11,
-    fontWeight: '600',
   },
-  progressTrack: {
+  cycleDetailVal: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  utilTrack: {
     height: 6,
     borderRadius: 3,
     overflow: 'hidden',
   },
-  progressFill: {
+  utilFill: {
     height: '100%',
     borderRadius: 3,
   },
-  cycleDatesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
+  cycleFooter: {
+    marginTop: 2,
   },
-  cycleDateText: {
+  cycleFooterText: {
     fontSize: 11,
   },
 });

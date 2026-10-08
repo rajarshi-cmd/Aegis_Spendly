@@ -3,6 +3,8 @@ import {
   getAccountById,
   updateAccountBalance,
   createTransactionRow,
+  getTransactionById,
+  updateTransactionRow,
   generateUUID,
 } from '../database/queries';
 import {
@@ -135,4 +137,64 @@ export class AccountingEngine {
       return tx;
     });
   }
+
+  /**
+   * Updates an existing transaction and safely mutates affected account balances.
+   */
+  public static async updateTransaction(
+    db: DatabaseExecutor,
+    id: string,
+    updates: Partial<Transaction>
+  ): Promise<Transaction> {
+    return await db.withTransaction(async () => {
+      const existing = await getTransactionById(db, id);
+      if (!existing) {
+        throw new Error(`Transaction not found: ${id}`);
+      }
+
+      const isAccountChanged = updates.account_id && updates.account_id !== existing.account_id;
+      const isAmountChanged = updates.amount !== undefined && updates.amount !== existing.amount;
+      const isTypeChanged = updates.type && updates.type !== existing.type;
+
+      if (isAccountChanged || isAmountChanged || isTypeChanged) {
+        const oldAccount = await getAccountById(db, existing.account_id);
+        if (oldAccount) {
+          // Revert old transaction on old account
+          let revertedBalance = oldAccount.balance;
+          if (oldAccount.type === 'BANK_DEPOSIT') {
+            revertedBalance = existing.type === 'INFLOW'
+              ? Number((oldAccount.balance - existing.amount).toFixed(2))
+              : Number((oldAccount.balance + existing.amount).toFixed(2));
+          } else if (oldAccount.type === 'CREDIT_CARD') {
+            revertedBalance = existing.type === 'INFLOW'
+              ? Number((oldAccount.balance + existing.amount).toFixed(2))
+              : Number((Math.max(0, oldAccount.balance - existing.amount)).toFixed(2));
+          }
+          await updateAccountBalance(db, oldAccount.id, revertedBalance);
+          oldAccount.balance = revertedBalance;
+        }
+
+        // Apply new transaction on target account
+        const targetAccountId = updates.account_id || existing.account_id;
+        const targetAccount = (oldAccount && targetAccountId === oldAccount.id)
+          ? oldAccount
+          : await getAccountById(db, targetAccountId);
+
+        if (targetAccount) {
+          const newType = updates.type || existing.type;
+          const newAmount = updates.amount !== undefined ? updates.amount : existing.amount;
+          if (newAmount <= 0) {
+            throw new Error('Transaction amount must be strictly greater than zero.');
+          }
+          const finalBalance = this.calculateNewBalance(targetAccount, newType as 'INFLOW' | 'OUTFLOW', newAmount);
+          await updateAccountBalance(db, targetAccount.id, finalBalance);
+        }
+      }
+
+      await updateTransactionRow(db, id, updates);
+      const updated = await getTransactionById(db, id);
+      return updated!;
+    });
+  }
 }
+

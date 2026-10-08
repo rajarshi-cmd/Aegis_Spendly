@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../presentation/theme';
 import { useFinanceData } from '../../presentation/hooks/useFinanceData';
 import { formatRupee } from '../../core/utils/currency';
-import { calculateTenureLeft, formatMonthShort } from '../../core/utils/date';
+import { calculateTenureLeft, formatMonthShort, isDateInMonth } from '../../core/utils/date';
 import { RecurringObligation } from '../../core/types/upcoming';
+import { Transaction } from '../../core/types/transactions';
 import { DeleteModal } from '../../presentation/components/modals/DeleteModal';
 
 interface PlanAheadScreenProps {
@@ -19,9 +20,11 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
 }) => {
   const { colors } = useTheme();
   const {
+    transactions,
     obligations,
     pastCommitments,
     plannedBudgets,
+    updatePlannedBudget,
     payObligation,
     undoPayObligation,
     skipObligation,
@@ -39,6 +42,12 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
 
   const [obToDelete, setObToDelete] = useState<RecurringObligation | null>(null);
   const [showSealModal, setShowSealModal] = useState<boolean>(false);
+  const [isEditingBudgets, setIsEditingBudgets] = useState<boolean>(false);
+
+  // DEF-012: Custom pay obligation state
+  const [selectedObForCustomPay, setSelectedObForCustomPay] = useState<RecurringObligation | null>(null);
+  const [customPayAmount, setCustomPayAmount] = useState<string>('');
+  const [customPayError, setCustomPayError] = useState<string | null>(null);
 
   const activeMonthShort = formatMonthShort(activeMonth || 'October 2026');
 
@@ -58,18 +67,53 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
   const totalCommitted = visibleObligations.reduce((sum, o) => sum + o.amount, 0);
   const totalPlannedBudget = plannedBudgets.reduce((sum, b) => sum + b.planned_amount, 0);
 
-  // Mock used budget mapping for demo
-  const mockUsedBudgets: Record<string, number> = {
-    'Food & drinks': 5140,
-    Home: 4220,
-    Transport: 2940,
-    Shopping: 3480,
-    Entertainment: 920,
+  // Helper to identify Opening Balances (DEF-010)
+  const isOpeningBalance = (t: Transaction) => {
+    const cat = (t.category || '').toLowerCase();
+    const desc = (t.description || '').toLowerCase();
+    return cat === 'opening balance' || desc.includes('opening');
   };
+
+  // DEF-012: Real used budget mapping calculated strictly from actual transactions!
+  const usedBudgets = useMemo(() => {
+    const map: Record<string, number> = {};
+    plannedBudgets.forEach((b) => {
+      const sum = transactions
+        .filter(
+          (t) =>
+            t.type === 'OUTFLOW' &&
+            !isOpeningBalance(t) &&
+            (t.category || '').toLowerCase() === b.category.toLowerCase() &&
+            (!activeMonth || activeMonth.toLowerCase() === 'all months' || isDateInMonth(t.timestamp, activeMonth))
+        )
+        .reduce((s, t) => s + t.amount, 0);
+      map[b.category] = sum;
+    });
+    return map;
+  }, [plannedBudgets, transactions, activeMonth]);
+
+  const totalUsedBudget = Object.values(usedBudgets).reduce((sum, v) => sum + v, 0);
 
   const handlePay = async (obId: string) => {
     try {
       await payObligation(obId);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleConfirmCustomPay = async () => {
+    if (!selectedObForCustomPay) return;
+    const num = parseFloat(customPayAmount.replace(/[^0-9.]/g, ''));
+    if (isNaN(num) || num <= 0) {
+      setCustomPayError('Amount must be strictly greater than ₹0. 0 cannot be entered.');
+      return;
+    }
+    setCustomPayError(null);
+    try {
+      await payObligation(selectedObForCustomPay.id, num);
+      setSelectedObForCustomPay(null);
+      setCustomPayAmount('');
     } catch (e) {
       console.error(e);
     }
@@ -131,7 +175,7 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
           <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>PLANNED CATEGORY BUDGET</Text>
           <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{formatRupee(totalPlannedBudget)}</Text>
           <Text style={[styles.kpiSub, { color: colors.textMuted }]}>
-            {formatRupee(Math.max(0, totalPlannedBudget - 24600))} still available
+            {formatRupee(Math.max(0, totalPlannedBudget - totalUsedBudget))} remaining in guardrails
           </Text>
         </View>
 
@@ -258,81 +302,82 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
                         <Text
                           style={[
                             styles.obStatusLabel,
-                            { color: isPaid ? colors.successText : isSkipped ? colors.textMuted : '#B45309' },
+                            {
+                              color: isPaid
+                                ? colors.successText
+                                : isSkipped
+                                ? colors.textMuted
+                                : colors.warningText,
+                            },
                           ]}
                         >
-                          {isPaid ? 'Paid' : isSkipped ? 'Skipped' : 'Awaiting confirmation'}
+                          {isPaid ? 'Paid this cycle' : isSkipped ? 'Skipped this month' : 'Due this cycle'}
                         </Text>
                       </View>
-
-                      <TouchableOpacity
-                        onPress={() => setObToDelete(ob)}
-                        style={{ marginLeft: 10, padding: 4 }}
-                      >
-                        <Ionicons name="close-circle-outline" size={16} color={colors.textMuted} />
-                      </TouchableOpacity>
                     </View>
 
-                  {/* Paid Confirmed Strip */}
-                  {isPaid ? (
-                    <View style={[styles.paidConfirmedStrip, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Ionicons name="checkmark-circle" size={14} color="#059669" style={{ marginRight: 6 }} />
-                        <Text style={[styles.paidConfirmedText, { color: '#065F46' }]}>
-                          Payment confirmed for this cycle ✓
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.undoBtn, { borderColor: '#A7F3D0', backgroundColor: '#FFFFFF' }]}
-                        onPress={() => undoPayObligation(ob.id)}
-                      >
-                        <Text style={[styles.undoBtnText, { color: '#065F46' }]}>Undo</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : isSkipped ? (
-                    /* Skipped Strip with Undo */
-                    <View style={[styles.skippedStrip, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Ionicons name="play-forward-outline" size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
-                        <Text style={[styles.skippedText, { color: colors.textMuted }]}>
-                          Skipped for this cycle
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.undoBtn, { borderColor: colors.borderSubtle, backgroundColor: colors.surface }]}
-                        onPress={() => undoSkipObligation(ob.id)}
-                      >
-                        <Text style={[styles.undoBtnText, { color: colors.textSecondary }]}>Undo</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    /* Interactive Check-In Prompt Strip */
-                      <View style={[styles.checkInStrip, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                          <Ionicons name="notifications" size={13} color="#B45309" style={{ marginRight: 6 }} />
-                          <Text style={styles.checkInText}>Payment due {dueDayFormatted} {activeMonthShort}. Paid?</Text>
+                    {/* Action Bar */}
+                    {isPaid ? (
+                      <View style={[styles.obActionRow, { backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginRight: 6 }} />
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.successText }}>
+                            Logged in ledger
+                          </Text>
                         </View>
-
-                      <View style={styles.checkInButtons}>
-                        <TouchableOpacity
-                          style={[styles.skipBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-                          onPress={() => skipObligation(ob.id)}
-                        >
-                          <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Skip this month</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.paidBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                          onPress={() => handlePay(ob.id)}
-                        >
-                          <Text style={[styles.paidBtnText, { color: '#FFFFFF' }]}>Yes, paid</Text>
+                        <TouchableOpacity onPress={() => undoPayObligation(ob.id)}>
+                          <Text style={{ fontSize: 12, color: colors.textMuted }}>Undo payment</Text>
                         </TouchableOpacity>
                       </View>
-                    </View>
-                  )}
-                </View>
-              );
-            }))}
+                    ) : isSkipped ? (
+                      <View style={[styles.obActionRow, { backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8 }]}>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>Skipped for this cycle</Text>
+                        <TouchableOpacity onPress={() => undoSkipObligation(ob.id)}>
+                          <Text style={{ fontSize: 12, color: colors.primary }}>Undo skip</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.obActionRow}>
+                        <TouchableOpacity
+                          style={styles.archiveActionBtn}
+                          onPress={() => setObToDelete(ob)}
+                        >
+                          <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+                        </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={[styles.skipBtn, { borderColor: colors.border }]}
+                            onPress={() => skipObligation(ob.id)}
+                          >
+                            <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Skip</Text>
+                          </TouchableOpacity>
+
+                          {/* DEF-012: Pay with edited amount */}
+                          <TouchableOpacity
+                            style={[styles.customPayBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                            onPress={() => {
+                              setSelectedObForCustomPay(ob);
+                              setCustomPayAmount(ob.amount.toString());
+                              setCustomPayError(null);
+                            }}
+                          >
+                            <Text style={[styles.customPayBtnText, { color: colors.textSecondary }]}>Pay custom...</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.paidBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                            onPress={() => handlePay(ob.id)}
+                          >
+                            <Text style={[styles.paidBtnText, { color: '#FFFFFF' }]}>Yes, paid</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
           </View>
 
           {/* Dashed Add Commitment Button */}
@@ -345,23 +390,26 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Right Column: Spending Guardrails / Planned Budgets */}
+        {/* Right Column: Spending Guardrails / Planned Budgets (DEF-012: Sliders & Editing) */}
         <View style={[styles.colCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
           <View style={styles.colHeader}>
             <View>
               <Text style={[styles.colMicro, { color: colors.textMuted }]}>SPENDING GUARDRAILS</Text>
               <Text style={[styles.colTitle, { color: colors.textPrimary }]}>Planned budgets</Text>
             </View>
-            <TouchableOpacity onPress={onOpenAddBudget}>
-              <Text style={[styles.editLink, { color: colors.primary }]}>Edit</Text>
+            <TouchableOpacity onPress={() => setIsEditingBudgets(!isEditingBudgets)}>
+              <Text style={[styles.editLink, { color: colors.primary, fontWeight: '700' }]}>
+                {isEditingBudgets ? 'Done' : 'Edit'}
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.budgetList}>
             {plannedBudgets.map((b) => {
-              const used = mockUsedBudgets[b.category] || 0;
-              const pct = Math.min(100, Math.round((used / b.planned_amount) * 100));
+              const used = usedBudgets[b.category] || 0;
+              const pct = b.planned_amount > 0 ? Math.min(100, Math.round((used / b.planned_amount) * 100)) : 0;
               const isOver = pct > 90;
+
               return (
                 <View key={b.id} style={styles.budgetItem}>
                   <View style={styles.budgetTopRow}>
@@ -382,6 +430,38 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
                       ]}
                     />
                   </View>
+
+                  {/* DEF-012: Interactive Slider / Stepper Controls when Editing */}
+                  {isEditingBudgets && (
+                    <View style={styles.budgetSliderRow}>
+                      <TouchableOpacity
+                        style={[styles.stepperBtn, { borderColor: colors.border }]}
+                        onPress={() => updatePlannedBudget(b.id, Math.max(500, b.planned_amount - 500))}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>- ₹500</Text>
+                      </TouchableOpacity>
+
+                      <View style={[styles.budgetAmountBox, { borderColor: colors.border }]}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginRight: 2 }}>₹</Text>
+                        <TextInput
+                          style={[styles.budgetAmountInput, { color: colors.textPrimary }]}
+                          keyboardType="numeric"
+                          value={b.planned_amount.toString()}
+                          onChangeText={(txt) => {
+                            const val = parseFloat(txt.replace(/[^0-9]/g, ''));
+                            if (!isNaN(val)) updatePlannedBudget(b.id, val);
+                          }}
+                        />
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.stepperBtn, { borderColor: colors.border }]}
+                        onPress={() => updatePlannedBudget(b.id, b.planned_amount + 500)}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>+ ₹500</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -396,6 +476,67 @@ export const PlanAheadScreen: React.FC<PlanAheadScreenProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* DEF-012: Pay With Custom Amount Modal */}
+      {selectedObForCustomPay && (
+        <Modal visible={true} transparent animationType="fade" onRequestClose={() => setSelectedObForCustomPay(null)}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.dialogCard, { backgroundColor: colors.surface }]}>
+              <View style={styles.dialogHeader}>
+                <View style={[styles.dialogIconBox, { backgroundColor: '#EDE9FE' }]}>
+                  <Ionicons name="cash-outline" size={20} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>
+                    Pay {selectedObForCustomPay.name}
+                  </Text>
+                  <Text style={[styles.dialogSub, { color: colors.textMuted }]}>
+                    Default amount is {formatRupee(selectedObForCustomPay.amount)}. Enter the exact amount paid.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ marginVertical: 16 }}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Amount Paid *</Text>
+                <View style={[styles.currencyInputWrap, { borderColor: customPayError ? colors.danger : colors.border }]}>
+                  <Text style={[styles.currencySymbol, { color: colors.textMuted }]}>₹</Text>
+                  <TextInput
+                    style={[styles.currencyInput, { color: colors.textPrimary }]}
+                    keyboardType="numeric"
+                    value={customPayAmount}
+                    onChangeText={(txt) => {
+                      setCustomPayAmount(txt);
+                      setCustomPayError(null);
+                    }}
+                    autoFocus
+                  />
+                </View>
+                {customPayError && (
+                  <Text style={{ fontSize: 12, color: colors.danger, marginTop: 6, fontWeight: '600' }}>
+                    {customPayError}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.dialogFooter}>
+                <TouchableOpacity
+                  style={[styles.dialogCancelBtn, { backgroundColor: colors.background }]}
+                  onPress={() => setSelectedObForCustomPay(null)}
+                >
+                  <Text style={[styles.dialogCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.dialogConfirmBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleConfirmCustomPay}
+                >
+                  <Text style={styles.dialogConfirmText}>Confirm & Record</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* Universal Delete Confirmation Modal for Obligations */}
       {obToDelete && (
@@ -460,15 +601,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   microTag: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.8,
-    marginBottom: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: -0.4,
+    marginTop: 2,
   },
   subtitle: {
     fontSize: 13,
@@ -482,13 +622,13 @@ const styles = StyleSheet.create({
   budgetActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: 8,
     borderWidth: 1,
   },
   budgetActionText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   addCommitmentBtn: {
@@ -499,44 +639,43 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addCommitmentText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   kpiRow: {
     flexDirection: 'row',
-    gap: 16,
     flexWrap: 'wrap',
+    gap: 16,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 200,
-    padding: 18,
-    borderRadius: 14,
+    minWidth: 160,
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    letterSpacing: 0.6,
   },
   kpiAmount: {
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 2,
+    marginTop: 8,
   },
   kpiSub: {
     fontSize: 11,
-    fontWeight: '500',
+    marginTop: 4,
   },
   alertCard: {
-    flex: 1.4,
-    minWidth: 240,
+    flex: 1,
+    minWidth: 260,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
   },
   alertTitle: {
@@ -548,202 +687,194 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#B45309',
     marginTop: 2,
-    lineHeight: 16,
   },
   twoColRow: {
     flexDirection: 'row',
-    gap: 20,
     flexWrap: 'wrap',
+    gap: 16,
   },
   colCard: {
+    padding: 18,
     borderRadius: 14,
     borderWidth: 1,
-    padding: 20,
-    minWidth: 320,
   },
   colHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 8,
   },
   colMicro: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   colTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  activePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  activePillText: {
-    fontSize: 11,
+    fontSize: 16,
     fontWeight: '700',
+    marginTop: 2,
   },
   sealMonthBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
   },
   sealMonthBtnText: {
     fontSize: 11,
     fontWeight: '600',
   },
+  activePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   obligationsList: {
     gap: 12,
-    marginBottom: 16,
+  },
+  emptyObligationsBox: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyObligationsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  emptyObligationsSub: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
   },
   obCard: {
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    overflow: 'hidden',
+    gap: 12,
   },
   obTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   obIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   obName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
   obNotes: {
     fontSize: 11,
     marginTop: 2,
   },
+  tenureTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  tenureTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6D28D9',
+  },
   obDueDate: {
     fontSize: 11,
   },
   obAmount: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    marginTop: 1,
+    marginTop: 2,
   },
   obStatusLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  paidConfirmedStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-  },
-  paidConfirmedText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  skippedStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-  },
-  skippedText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  undoBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  undoBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  checkInStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  checkInText: {
-    fontSize: 12,
-    color: '#92400E',
-    fontWeight: '600',
-  },
-  checkInButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  paidBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  paidBtnText: {
-    fontSize: 11,
     fontWeight: '700',
+    marginTop: 2,
+  },
+  obActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  archiveActionBtn: {
+    padding: 6,
   },
   skipBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
   },
   skipBtnText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
+  },
+  customPayBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  customPayBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  paidBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  paidBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   dashedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 10,
     borderWidth: 1,
     borderStyle: 'dashed',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 12,
   },
   dashedBtnText: {
     fontSize: 13,
     fontWeight: '600',
   },
   editLink: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
   },
   budgetList: {
-    gap: 14,
-    marginBottom: 16,
+    gap: 16,
   },
   budgetItem: {
     gap: 6,
   },
   budgetTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   budgetName: {
     fontSize: 13,
@@ -753,45 +884,123 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   budgetTrack: {
-    height: 6,
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   budgetFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
   },
-  tenureTag: {
+  budgetSliderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EDE9FE',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
+    gap: 8,
     marginTop: 4,
   },
-  tenureTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6D28D9',
+  stepperBtn: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  emptyObligationsBox: {
-    paddingVertical: 36,
-    paddingHorizontal: 20,
+  budgetAmountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    flex: 1,
+  },
+  budgetAmountInput: {
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+    padding: 0,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 14,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dialogIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyObligationsTitle: {
-    fontSize: 14,
+  dialogTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    marginTop: 8,
   },
-  emptyObligationsSub: {
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: 'center',
-    lineHeight: 16,
-    maxWidth: 280,
+  dialogSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  currencyInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  currencyInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dialogFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 10,
+  },
+  dialogCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  dialogCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dialogConfirmBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  dialogConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

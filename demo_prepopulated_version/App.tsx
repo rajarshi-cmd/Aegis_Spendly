@@ -51,6 +51,7 @@ const MainNavigator: React.FC = () => {
   const isDesktop = width >= 768;
 
   const { themeName, colors } = useTheme();
+  const { recordUserActivity } = useAuthSecurity();
   const {
     loading,
     error,
@@ -155,6 +156,8 @@ const MainNavigator: React.FC = () => {
 
   return (
     <View
+      onTouchStart={recordUserActivity}
+      onResponderGrant={recordUserActivity}
       style={[
         styles.appRoot,
         {
