@@ -19,6 +19,7 @@
 | **DEF-015** | Missing Calendar Date Picker for Historical / Past Expenses in Add Entry | Add Entry Modal | Medium | User | 🔴 Open | Pending Fix |
 | **DEF-016** | Transaction Rows Lack In-Place Editing Capability | Transactions Ledger | Medium | User | 🔴 Open | Pending Fix |
 | **DEF-017** | Inactivity-Based Idle Screen Lock vs. Fixed Inopportune Timer | Security / useAuthSecurity | High | User | 🔴 Open | Pending Fix |
+| **DEF-018** | Transactions Filtered by Month While Sidebar Badge & Overview Display Mismatched Counts | Navigation / Month Filter | Medium | User | 🔴 Open | Pending Fix |
 
 ---
 
@@ -172,3 +173,29 @@ The auto-lock timer in `useAuthSecurity.tsx` triggers on a fixed elapsed timer f
 #### 🎯 Expected vs. Actual Behavior
 * **Expected:** Inactivity timer should monitor user interaction (screen touches, typing, navigation) and reset the countdown timer on every touch. Only lock the app if there is genuine zero activity for the configured duration.
 * **Actual:** Fixed timer fires regardless of active user touches.
+
+---
+
+### DEF-018: Transactions Filtered by Month While Sidebar Badge & Overview Display Mismatched Counts
+
+* **Defect ID:** `DEF-018`
+* **Module:** Navigation / Header Month Filter / Overview & Transactions Sync
+* **Severity:** Medium
+* **Discovered In:** Android Release APK v1.0.2 (Build 3)
+* **Status:** 🔴 Open
+
+#### 📝 Description
+When the user switches the header month selector away from the month in which transactions were recorded (e.g. to 'August 2026' when transactions were created in 'October 2026'), all transactions disappear from `TransactionsScreen` (`0 entries in your personal ledger`). However:
+1. The left sidebar `Transactions` navigation item still displays a badge count of `4` because `App.tsx` passes `transactions.length` (unfiltered all-time count).
+2. The `OverviewScreen` continues displaying October's 4 transactions under 'Recent transactions' because it rendered raw `transactions.slice(0, 4)` rather than `monthFilteredTransactions`.
+3. Initial account balances should not be polluting the general monthly transactions ledger as fake movements.
+
+#### 🎯 Expected vs. Actual Behavior
+* **Expected:**
+  1. The sidebar badge should match the filtered month's active transaction count (or display `0` when August is selected).
+  2. `OverviewScreen`'s 'Recent transactions' list must strictly honor `activeMonth` filtering so it doesn't show October transactions when August is selected.
+  3. Clearly indicate in the empty state when transactions exist in other months, with a 1-tap shortcut to "Jump to Current Month (October 2026)".
+  4. Segregate opening balances from regular monthly transactions.
+* **Actual:** Transactions screen shows empty while sidebar badge says 4 and Overview shows October entries.
+* **Evidence:** `defects/v1.0.2/assets/DEF-018_transactions_month_filter_empty.jpg`, `defects/v1.0.2/assets/DEF-018_overview_mismatched_month_list.jpg`
+
