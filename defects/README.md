@@ -11,7 +11,7 @@ Welcome to the centralized Defect Tracking repository for Aegis Spendly. This di
 
 | Target Version | Total Defects | Open | In Progress | Resolved | Defect Log |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **v1.0.1 (Build 2)** | 2 | 2 | 0 | 0 | [v1.0.1 Defect Log](./v1.0.1/DEFECT_LOG.md) |
+| **v1.0.1 (Build 2)** | 3 | 3 | 0 | 0 | [v1.0.1 Defect Log](./v1.0.1/DEFECT_LOG.md) |
 
 ---
 

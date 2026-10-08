@@ -12,6 +12,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **[DEF-001](#def-001-lock-immediately-toggle-thumb-remains-slid-to-the-right-in-off-state)** | Visual / UI State | Medium | Onboarding & Settings Drawer | "Lock immediately" toggle switch knob stays on the right even when OFF | 🟡 Logged (Open) |
 | **[DEF-002](#def-002-add-entry-button-touches-screen-edge-on-tablet-rotation)** | Layout / Responsive | Medium | Navigation / Header / Action Buttons | "Add entry" button touches screen edge on rotation; does not autofit across phone & tablet sizes | 🟡 Logged (Open) |
+| **[DEF-003](#def-003-income-page-must-enforce-selecting-salary-credited-bank-to-proceed)** | Form Validation / Business Logic | Medium | Onboarding (Step 4 — Income) | Missing validation: user must be required to select at least one bank for salary credit before proceeding | 🟡 Logged (Open) |
 
 ---
 
@@ -93,3 +94,40 @@ Upon rotating the tablet, the button crowds or touches the edge of the display w
 - In `App.tsx`, `isDesktop` threshold (`width >= 768`) dynamically flips between sidebar desktop layout and bottom TabBar mobile layout on orientation shifts.
 - Fixed positioning or container padding in `SpendlyHeader.tsx`, `TabBar.tsx`, and `TransactionsScreen.tsx` may lack dynamic safe-area insets (`useSafeAreaInsets`) along bottom and horizontal edges, causing elements to crowd tablet system taskbars when rotated.
 - Recommended fix when fix phase starts: Wrap action bars/buttons with responsive safe padding (`insets.bottom`, `insets.right`), verify breakpoint behavior, and apply responsive margins so the button auto-fits gracefully across all phone and tablet dimensions.
+
+---
+
+### DEF-003: Income page must enforce selecting salary credited bank to proceed
+
+- **Defect ID:** `DEF-003`
+- **Reported Date:** 2026-10-08
+- **Platform:** Android (Release APK v1.0.1)
+- **Component / Screen:**
+  - `app/src/presentation/components/onboarding/OnboardingScreen.tsx` (Step 4 — Income & Earnings Type / Salaried Mode)
+- **Defect Type:** Form Validation / Business Logic
+- **Severity:** Medium
+- **Priority:** Normal
+- **Status:** 🟡 **Logged (Open)** — *Awaiting batch defect fix instruction*
+
+#### Description
+During onboarding on **Step 4: Income & Earnings Type**, when a user chooses the **Salaried Employee** model, the user is currently able to tap "Continue to Drive Sync" without selecting any bank account under **"SALARY CREDITED TO BANK"**. The app should enforce that at least one bank account is selected as the salary credited account before proceeding.
+
+#### Expected Behavior
+- When "Salaried Employee" is selected, the form should require selecting at least one linked bank account to receive the monthly salary before enabling "Continue" or allowing progression to the next step.
+- If no bank is selected (or no banks were added), a clear validation error or prompt should instruct the user to select or add a bank account for salary deposits.
+
+#### Actual Behavior
+- The "Continue to Drive Sync" button is active unconditionally and allows advancing to the next step even when no bank is selected under "SALARY CREDITED TO BANK".
+- The system silently falls back to an empty string or the first bank in the array without explicit user selection.
+
+#### Steps to Reproduce
+1. Launch app onboarding up to **Step 4: Income & Earnings Type**.
+2. Select **Salaried Employee (Regular Monthly Inflow)**.
+3. Enter expected salary and payday, but do not select any bank under **SALARY CREDITED TO BANK**.
+4. Tap **Continue to Drive Sync**.
+5. The app proceeds to Step 5 without validating that a bank account was selected.
+
+#### Technical Analysis (For Fix Phase Reference)
+- In `OnboardingScreen.tsx` (line 1179), the "Continue" button calls `setCurrentStep('DRIVE')` directly without checking `selectedSalaryBank`.
+- When finishing onboarding (line 373), `salary_account_id` defaults to `selectedSalaryBank || (banks[0]?.name ?? '')`.
+- Recommended fix when fix phase starts: Add validation requiring `selectedSalaryBank` when `incomeType === 'SALARIED'` (and ensure at least one bank exists, or guide user to add one), disabling the continue button or displaying an inline error message until a bank is selected.
