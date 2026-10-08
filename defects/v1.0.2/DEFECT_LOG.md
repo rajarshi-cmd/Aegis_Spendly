@@ -140,3 +140,16 @@
   1. Implemented Year navigation and 12-month selection grid in `SpendlyHeader.tsx`.
   2. Synchronized `activeMonth` filtering across `CreditCardsScreen.tsx` and `BanksScreen.tsx`.
   3. Made the 12-month bar chart in `OverviewScreen.tsx` interactive (tapping any bar switches active month).
+
+---
+
+## 💡 Future Suggestions & Proposals (Post-Alpha Review)
+
+### SUG-001 (GitHub Issue #20): Month & Year Granularity Option for Past Historical Transaction Entries
+* **Issue ID:** `SUG-001` / [GitHub #20](https://github.com/rajarshi-cmd/Aegis_Spendly/issues/20)
+* **Module:** Add Entry Drawer & Historical Data Backfilling
+* **Severity:** Enhancement / Proposal
+* **Status:** ⏳ Deferred for Alpha Testing
+* **Proposal:** When users backfill past expenses from previous months, they frequently cannot recall the exact calendar day. Offer an option or toggle to enter only Month and Year (defaulting to the 1st or month-level record) rather than forcing exact day selection on the calendar.
+* **Decision:** No code changes made for v1.0.3. Will collect usage feedback during Alpha user testing before implementing.
+
