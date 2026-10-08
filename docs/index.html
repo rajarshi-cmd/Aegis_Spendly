@@ -3,177 +3,317 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aegis Spendly - Download Android APK</title>
-  <meta name="description" content="Private, air-gapped financial ledger for Android. Local-first encrypted SQLite database with Google Drive backups." />
-  <link rel="icon" href="https://raw.githubusercontent.com/rajarshi-cmd/Aegis_Spendly/main/app/assets/icon.png" />
+  <title>Aegis Spendly — Private Financial Vault & Expense Tracker</title>
+  <meta name="description" content="Zero-knowledge, air-gapped financial tracker for Android. Encrypted SQLite database, client-side PIN security, and ₹500-inspired minimalist design." />
+  <link rel="icon" type="image/png" href="./assets/spendly-logo.png" />
   <style>
     :root {
-      --bg: #090D16;
-      --card-bg: #111827;
-      --card-border: #1F2937;
-      --primary: #059669;
-      --primary-hover: #047857;
-      --primary-light: rgba(5, 150, 105, 0.15);
-      --text-main: #F9FAFB;
-      --text-muted: #9CA3AF;
-      --accent-amber: #D97706;
-      --danger: #EF4444;
+      --bg-dark: #0A0E13;
+      --bg-surface: #101720;
+      --card-bg: rgba(18, 25, 34, 0.88);
+      --card-border: rgba(51, 65, 85, 0.6);
+      --card-border-glow: rgba(16, 185, 129, 0.3);
+      --currency-teal: #10B981;
+      --currency-teal-light: #34D399;
+      --currency-stone: #94A3B8;
+      --currency-silver: #F1F5F9;
+      --primary: #10B981;
+      --primary-hover: #059669;
+      --primary-glow: rgba(16, 185, 129, 0.35);
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --amber: #F59E0B;
     }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
     }
+
     body {
-      background-color: var(--bg);
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(ellipse at 50% 0%, #1A282D 0%, #0F171D 50%, var(--bg-dark) 100%),
+        radial-gradient(rgba(16, 185, 129, 0.07) 1px, transparent 0);
+      background-size: 100% 100%, 28px 28px;
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px;
+      padding: 48px 20px 32px;
+      position: relative;
+      overflow-x: hidden;
     }
+
+    /* Ambient Subtle Glow Behind Logo */
+    .glow-aura {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(20, 184, 166, 0.05) 50%, transparent 70%);
+      filter: blur(40px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
     .container {
       width: 100%;
-      max-width: 680px;
+      max-width: 660px;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
+      position: relative;
+      z-index: 1;
     }
+
+    /* App Logo */
+    .logo-wrapper {
+      position: relative;
+      margin-bottom: 22px;
+      display: inline-block;
+    }
+
+    .app-logo {
+      width: 108px;
+      height: 108px;
+      border-radius: 26px;
+      box-shadow: 
+        0 14px 34px rgba(0, 0, 0, 0.7),
+        0 0 24px rgba(16, 185, 129, 0.28),
+        inset 0 1px 1px rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+      display: block;
+    }
+
+    .app-logo:hover {
+      transform: translateY(-4px) scale(1.03);
+      box-shadow: 
+        0 20px 40px rgba(0, 0, 0, 0.8),
+        0 0 32px rgba(16, 185, 129, 0.45);
+    }
+
+    /* Badge Pill */
     .badge-pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: var(--primary-light);
-      border: 1px solid rgba(5, 150, 105, 0.4);
-      color: #34D399;
-      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      color: var(--currency-teal-light);
+      padding: 6px 16px;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.5px;
-      margin-bottom: 20px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      backdrop-filter: blur(8px);
     }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--currency-teal-light);
+      box-shadow: 0 0 8px var(--currency-teal-light);
+    }
+
     .logo-title {
-      font-size: 38px;
+      font-size: 40px;
       font-weight: 900;
       letter-spacing: -1px;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #FFFFFF 0%, #A7F3D0 100%);
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #FFFFFF 0%, #E2E8F0 45%, #6EE7B7 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
     .subtitle {
-      font-size: 16px;
+      font-size: 15px;
       color: var(--text-muted);
-      line-height: 1.5;
-      margin-bottom: 28px;
-      max-width: 520px;
+      line-height: 1.6;
+      margin-bottom: 30px;
+      max-width: 530px;
     }
+
+    /* Primary Download Card */
     .download-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 30px;
+      border-radius: 22px;
+      padding: 32px 28px;
       width: 100%;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-      margin-bottom: 28px;
+      box-shadow: 
+        0 24px 48px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      margin-bottom: 30px;
+      backdrop-filter: blur(14px);
+      position: relative;
+      overflow: hidden;
     }
+
+    .download-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--currency-teal-light), transparent);
+      opacity: 0.8;
+    }
+
     .version-tag {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
       font-size: 13px;
       color: var(--text-muted);
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
-    .version-tag strong {
-      color: var(--text-main);
+
+    .version-badge {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--currency-silver);
+      font-weight: 600;
     }
+
     .btn-download {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      background: var(--primary);
+      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
       color: #FFFFFF;
       text-decoration: none;
       font-size: 16px;
       font-weight: 700;
-      padding: 16px 32px;
+      padding: 18px 32px;
       border-radius: 14px;
       width: 100%;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+      transition: all 0.22s ease;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
+
     .btn-download:hover {
-      background: var(--primary-hover);
+      background: linear-gradient(135deg, #34D399 0%, #059669 100%);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(5, 150, 105, 0.45);
+      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.55);
     }
+
+    .btn-download:active {
+      transform: translateY(0);
+    }
+
     .btn-secondary {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.09);
       color: var(--text-main);
       text-decoration: none;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      padding: 12px 20px;
+      padding: 13px 20px;
       border-radius: 12px;
-      margin-top: 12px;
+      margin-top: 14px;
       width: 100%;
-      transition: background 0.2s;
+      transition: background 0.2s, border-color 0.2s;
     }
+
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(52, 211, 153, 0.3);
     }
+
+    /* Security Feature Cards */
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 14px;
       width: 100%;
-      margin-bottom: 28px;
+      margin-bottom: 30px;
       text-align: left;
     }
+
     @media (max-width: 600px) {
       .info-grid {
         grid-template-columns: 1fr;
       }
+      .logo-title {
+        font-size: 32px;
+      }
     }
+
     .info-box {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 18px;
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.2s ease, transform 0.2s ease;
     }
+
+    .info-box:hover {
+      border-color: rgba(52, 211, 153, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .info-icon {
+      font-size: 20px;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+
     .info-box h3 {
       font-size: 14px;
       font-weight: 700;
       margin-bottom: 6px;
       color: var(--text-main);
     }
+
     .info-box p {
       font-size: 12px;
       color: var(--text-muted);
-      line-height: 1.5;
+      line-height: 1.55;
     }
+
+    /* Installation Guide Card */
     .guide-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 20px;
-      padding: 24px;
+      padding: 26px;
       width: 100%;
       text-align: left;
-      margin-bottom: 30px;
+      margin-bottom: 32px;
+      backdrop-filter: blur(10px);
     }
+
     .guide-card h2 {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 800;
       margin-bottom: 16px;
+      color: var(--text-main);
     }
+
     .step-list {
       list-style: none;
       counter-reset: steps;
@@ -181,6 +321,7 @@
       flex-direction: column;
       gap: 14px;
     }
+
     .step-item {
       counter-increment: steps;
       display: flex;
@@ -189,14 +330,15 @@
       line-height: 1.5;
       color: var(--text-muted);
     }
+
     .step-item::before {
       content: counter(steps);
-      background: var(--primary-light);
-      border: 1px solid rgba(5, 150, 105, 0.4);
-      color: #34D399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.4);
+      color: var(--currency-teal-light);
       width: 26px;
       height: 26px;
-      border-radius: 13px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -204,84 +346,119 @@
       font-weight: 800;
       flex-shrink: 0;
     }
+
     .step-item strong {
       color: var(--text-main);
     }
+
     .update-notice {
-      background: rgba(217, 119, 6, 0.1);
-      border: 1px solid rgba(217, 119, 6, 0.3);
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.25);
       border-radius: 12px;
       padding: 14px;
-      margin-top: 16px;
+      margin-top: 18px;
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.55;
       color: #FCD34D;
     }
+
     footer {
       font-size: 12px;
       color: var(--text-muted);
       margin-top: auto;
       padding-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    footer a {
+      color: var(--currency-teal-light);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
+  <div class="glow-aura"></div>
+
   <div class="container">
+    <!-- App Logo -->
+    <div class="logo-wrapper">
+      <img src="./assets/spendly-logo.png" alt="Aegis Spendly App Logo" class="app-logo" />
+    </div>
+
+    <!-- Security Badge -->
     <div class="badge-pill">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      AIR-GAPPED OFFLINE VAULT
+      <span class="badge-dot"></span>
+      AIR-GAPPED OFFLINE VAULT &bull; ZERO CLOUD
     </div>
 
     <h1 class="logo-title">Aegis Spendly</h1>
     <p class="subtitle">
-      Zero-knowledge personal finance tracker for Android. All records stay private on your device with client-side PIN encryption and automated Google Drive sync.
+      Zero-knowledge personal finance tracker for physical Android devices. All data remains encrypted on your device with PBKDF2 key stretching, SQLite local storage, and TikTok-style ergonomics.
     </p>
 
+    <!-- Main Download Card -->
     <div class="download-card">
       <div class="version-tag">
-        Latest Version: <strong>v1.0.2 (Android APK)</strong> &bull; Package: <code>com.aegis.spendly</code>
+        <span>Latest Release:</span>
+        <span class="version-badge">v1.0.2 (Build 3)</span>
+        <span>&bull;</span>
+        <span>Package: <code>com.aegis.spendly</code></span>
       </div>
 
       <a id="downloadBtn" href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/latest/download/spendly-release.apk" class="btn-download">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download APK (Direct)
       </a>
 
       <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases" class="btn-secondary">
-        View Release Notes & Changelogs on GitHub &rarr;
+        View Release Changelog on GitHub &rarr;
       </a>
     </div>
 
+    <!-- Security & Architecture Features -->
     <div class="info-grid">
       <div class="info-box">
-        <h3>🔒 PBKDF2 Master PIN</h3>
-        <p>10,000 iterations of cryptographic key stretching with brute-force rate-limiting and temporary lockouts.</p>
+        <span class="info-icon">🔒</span>
+        <h3>PBKDF2 Cryptographic Vault</h3>
+        <p>Master PIN key derivation with 10,000 hashing rounds, anti-tamper salt, and rate-limiting penalties.</p>
       </div>
       <div class="info-box">
-        <h3>🛡️ FLAG_SECURE Shield</h3>
-        <p>Hardware-level protection prevents unauthorized screenshots and hides records from the app switcher.</p>
+        <span class="info-icon">🛡️</span>
+        <h3>FLAG_SECURE Sandboxing</h3>
+        <p>Hardware-level window obfuscation blocks unauthorized screenshots and conceals cards in recent apps.</p>
       </div>
       <div class="info-box">
-        <h3>📊 10% Amber MAB Alert</h3>
-        <p>Dynamic warning whenever checking account balances drift within 10% of mandatory minimum thresholds.</p>
+        <span class="info-icon">⚡</span>
+        <h3>Auto-Delete Anti-Theft</h3>
+        <p>Configurable wipe threshold (3–10 failed PIN entries) safeguards against brute-force physical theft.</p>
       </div>
       <div class="info-box">
-        <h3>☁️ Drive Minimal Privilege</h3>
-        <p>Uses isolated <code>drive.file</code> scope strictly confined to a dedicated <code>Aegis Spendly/</code> folder.</p>
+        <span class="info-icon">💾</span>
+        <h3>Zero-Server Persistence</h3>
+        <p>Direct SQLite synchronous storage survives OS process termination without external network requests.</p>
       </div>
     </div>
 
+    <!-- Installation & Updating Instructions -->
     <div class="guide-card">
       <h2>How to Install & Update on Android</h2>
       <ul class="step-list">
         <li class="step-item">
           <div>
-            <strong>Download the APK</strong> by tapping the button above on your Android phone's browser (Chrome, Brave, etc.).
+            <strong>Download the APK</strong> by tapping the button above on your Android browser (Chrome, Brave, etc.).
           </div>
         </li>
         <li class="step-item">
           <div>
-            <strong>Allow Unknown Apps:</strong> When prompted, open <em>Settings</em> and toggle <em>Allow from this source</em> for your browser.
+            <strong>Allow Unknown Apps:</strong> When prompted by Android, open <em>Settings</em> and toggle <em>Allow from this source</em> for your browser.
           </div>
         </li>
         <li class="step-item">
@@ -292,17 +469,18 @@
       </ul>
 
       <div class="update-notice">
-        <strong>💡 Updating Preserves Your Data:</strong> As long as you do not uninstall the app, installing updated APKs from this repository will automatically preserve all your existing bank accounts, credit cards, transactions, and master PIN.
+        <strong>💡 Updating Preserves Your Data:</strong> Installing updated APKs from this repository preserves all your existing accounts, cards, transactions, and security settings automatically without wiping your vault.
       </div>
     </div>
 
     <footer>
-      Protected by PBKDF2 & SHA-256 Vault Architecture &bull; <a href="https://github.com/rajarshi-cmd/Aegis_Spendly" style="color: #34D399; text-decoration: none;">GitHub Repository</a>
+      <div>Protected by PBKDF2 & SHA-256 Vault Architecture &bull; <a href="https://github.com/rajarshi-cmd/Aegis_Spendly">GitHub Repository</a></div>
+      <div style="font-size: 11px; opacity: 0.7;">Found a bug? <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/issues/new/choose">Report a Defect on GitHub</a></div>
     </footer>
   </div>
 
   <script>
-    // Fetch latest release asset dynamically if available
+    // Dynamically resolve direct APK download URL from GitHub Releases API
     fetch('https://api.github.com/repos/rajarshi-cmd/Aegis_Spendly/releases/latest')
       .then(res => res.json())
       .then(data => {
