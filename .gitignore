@@ -20,6 +20,8 @@ app/expo-env.d.ts
 *.exe
 *.tmp
 *.bat
+*.apk
+_backups/
 aehd_extracted/
 
 # Logs & Debug
