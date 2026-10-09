@@ -408,19 +408,19 @@
     <div class="download-card">
       <div class="version-tag">
         <span>Latest Release:</span>
-        <span class="version-badge">v1.0.5 (Build 6)</span>
+        <span class="version-badge" id="versionBadge">v1.2.0 (Build 7)</span>
         <span>&bull;</span>
-        <span>Size: <span id="apkSizeTag">~76 MB</span></span>
+        <span>Size: <span id="apkSizeTag">82.4 MB</span></span>
         <span>&bull;</span>
         <span>Package: <code>com.aegis.spendly</code></span>
       </div>
 
-      <a id="downloadBtn" href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/latest/download/spendly-release.apk" class="btn-download" download="spendly-release.apk">
+      <a id="downloadBtn" href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.2.0/spendly-release.apk" class="btn-download" download="spendly-release.apk">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download APK (Direct)
       </a>
 
-      <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases" class="btn-secondary">
+      <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/tag/v1.2.0" class="btn-secondary">
         View Release Changelog on GitHub &rarr;
       </a>
     </div>
@@ -486,6 +486,12 @@
     fetch('https://api.github.com/repos/rajarshi-cmd/Aegis_Spendly/releases/latest')
       .then(res => res.json())
       .then(data => {
+        if (data.tag_name) {
+          const vBadge = document.getElementById('versionBadge');
+          if (vBadge) {
+            vBadge.textContent = `${data.tag_name} (Build 7)`;
+          }
+        }
         if (data.assets && data.assets.length > 0) {
           const apkAsset = data.assets.find(a => a.name.endsWith('.apk'));
           if (apkAsset) {
