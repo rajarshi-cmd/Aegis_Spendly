@@ -43,3 +43,6 @@ ios/
 android/
 app/ios/
 app/android/
+
+# Ephemeral screenshots
+*emu_screen*.png

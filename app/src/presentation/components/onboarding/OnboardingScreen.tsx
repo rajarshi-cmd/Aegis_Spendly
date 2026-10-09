@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Platform,
+  Modal,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
@@ -16,7 +18,6 @@ import { useAuthSecurity } from '../../hooks/useAuthSecurity';
 import { useFinanceData } from '../../hooks/useFinanceData';
 import { UserProfile, AvatarId } from '../../../core/types/profile';
 import { AutoLockPreset } from '../../../core/types/auth';
-import { SyncCadence, DayOfWeek } from '../../../core/types/sync';
 import { formatRupee } from '../../../core/utils/currency';
 import {
   validateUsername as checkUsername,
@@ -25,204 +26,449 @@ import {
   validateKeepTrackRatio,
   parseBalanceInput,
 } from '../../../core/utils/validators';
+import { AnimatedVault } from './AnimatedVault';
+import { formatOrdinalDay } from '../../../core/utils/date';
 
 type OnboardingStep =
   | 'IDENTITY'
   | 'BANKS'
   | 'CARDS'
-  | 'SALARY'
-  | 'DRIVE'
+  | 'INCOME'
   | 'SECURITY'
-  | 'CONFIRMATION';
+  | 'PIN'
+  | 'READY';
 
 interface BankDraft {
   id: string;
   name: string;
+  type: 'SAVINGS' | 'CURRENT';
+  nickname: string;
   balance: number;
   minBalance: number;
 }
 
 interface CardDraft {
   id: string;
+  provider: string;
   name: string;
+  network: 'Visa' | 'Mastercard' | 'RuPay' | 'Amex';
   limit: number;
   balance: number;
   cutDay: number;
   dueDay: number;
-  keepTrackRatio: number; // e.g. 50 (for 50%)
+  keepTrackRatio: number;
   color: 'EMERALD' | 'PURPLE' | 'CARAMEL';
+}
+
+interface IncomeStreamDraft {
+  id: string;
+  sourceName: string;
+  category: string;
+  amount: number;
+  dayOfMonth: number;
+  bankAccountId: string;
 }
 
 export const OnboardingScreen: React.FC = () => {
   const { colors } = useTheme();
-  const { user, updateConfig: updateSecurityConfig, completeOnboarding } = useAuthSecurity();
-  const { updateProfile, updateSyncConfig, initializeUserVault } = useFinanceData();
+  const { user, updateConfig: updateSecurityConfig, setupPin, completeOnboarding } = useAuthSecurity();
+  const { updateProfile, initializeUserVault } = useFinanceData();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('IDENTITY');
   const [isFinishing, setIsFinishing] = useState(false);
 
-  // Step 1: Identity fields
-  const [username, setUsername] = useState(user?.username || '');
+  // ---------------------------------------------------------
+  // STEP 1: IDENTITY
+  // ---------------------------------------------------------
   const [displayName, setDisplayName] = useState(user?.name || '');
+  const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [avatar, setAvatar] = useState<AvatarId>('Moon cat');
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
-  // Step 2: Bank Accounts (STARTS COMPLETELY EMPTY - No pre-added accounts!)
+  // ---------------------------------------------------------
+  // STEP 2: BANK ACCOUNTS
+  // ---------------------------------------------------------
   const [banks, setBanks] = useState<BankDraft[]>([]);
-  const [newBankName, setNewBankName] = useState('');
-  const [newBankBalance, setNewBankBalance] = useState('');
-  const [newBankMinBalance, setNewBankMinBalance] = useState('');
+  const [isAddBankSheetOpen, setIsAddBankSheetOpen] = useState(false);
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
+  const [draftBankType, setDraftBankType] = useState<'SAVINGS' | 'CURRENT'>('SAVINGS');
+  const [draftBankName, setDraftBankName] = useState('');
+  const [draftBankNickname, setDraftBankNickname] = useState('');
+  const [draftBankBalance, setDraftBankBalance] = useState('');
+  const [draftBankMinBalance, setDraftBankMinBalance] = useState('');
 
-  // Step 3: Credit Cards (STARTS COMPLETELY EMPTY - No pre-added cards!)
+  // ---------------------------------------------------------
+  // STEP 3: CREDIT CARDS
+  // ---------------------------------------------------------
   const [cards, setCards] = useState<CardDraft[]>([]);
-  const [newCardName, setNewCardName] = useState('');
-  const [newCardLimit, setNewCardLimit] = useState('');
-  const [newCardBalance, setNewCardBalance] = useState('');
-  const [newCardCutDay, setNewCardCutDay] = useState('15');
-  const [newCardDueDay, setNewCardDueDay] = useState('5');
-  const [newCardKeepTrackRatio, setNewCardKeepTrackRatio] = useState<number>(50); // Default 50%
-  const [newCardColor, setNewCardColor] = useState<'EMERALD' | 'PURPLE' | 'CARAMEL'>('EMERALD');
+  const [isAddCardSheetOpen, setIsAddCardSheetOpen] = useState(false);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [draftCardProvider, setDraftCardProvider] = useState('');
+  const [draftCardNickname, setDraftCardNickname] = useState('');
+  const [draftCardNetwork, setDraftCardNetwork] = useState<'Visa' | 'Mastercard' | 'RuPay' | 'Amex'>('Visa');
+  const [draftCardLimit, setDraftCardLimit] = useState('');
+  const [draftCardBalance, setDraftCardBalance] = useState('');
+  const [draftCardCapRatio, setDraftCardCapRatio] = useState<number>(30);
+  const [draftCardCutDay, setDraftCardCutDay] = useState('');
+  const [draftCardDueDay, setDraftCardDueDay] = useState('');
+  const [draftCardColor, setDraftCardColor] = useState<'EMERALD' | 'PURPLE' | 'CARAMEL'>('EMERALD');
   const [cardCutDayError, setCardCutDayError] = useState<string | null>(null);
   const [cardDueDayError, setCardDueDayError] = useState<string | null>(null);
 
-  // Step 4: Income Type (Salaried vs Other Payments)
-  const [incomeType, setIncomeType] = useState<'SALARIED' | 'OTHER'>('SALARIED');
-  const [salaryAmount, setSalaryAmount] = useState('');
-  const [salaryDay, setSalaryDay] = useState('1');
-  const [selectedSalaryBank, setSelectedSalaryBank] = useState<string>('');
-  const [salaryBankError, setSalaryBankError] = useState<string | null>(null);
+  // ---------------------------------------------------------
+  // STEP 4: INCOME STREAMS
+  // ---------------------------------------------------------
+  const [incomeStreams, setIncomeStreams] = useState<IncomeStreamDraft[]>([]);
+  const [isAddIncomeSheetOpen, setIsAddIncomeSheetOpen] = useState(false);
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [incomeSheetTab, setIncomeSheetTab] = useState<'SALARY' | 'FREELANCE'>('SALARY');
+  const [draftIncomeSource, setDraftIncomeSource] = useState('');
+  const [draftIncomeAmount, setDraftIncomeAmount] = useState('');
+  const [draftIncomeDay, setDraftIncomeDay] = useState<number>(1);
+  const [draftIncomeBank, setDraftIncomeBank] = useState('');
+  const [returnToIncomeSheetAfterBank, setReturnToIncomeSheetAfterBank] = useState(false);
 
-  // Step 5: Google Drive (Hidden per DEF-008 until Phase 2)
-  const SHOW_DRIVE_STEP = false;
-  const [driveFolderName, setDriveFolderName] = useState('Aegis Spendly');
-  const [syncCadence, setSyncCadence] = useState<SyncCadence>('DAILY');
-  const [dailyTime, setDailyTime] = useState('22:00');
-  const [weeklyDay, setWeeklyDay] = useState<DayOfWeek>('SUNDAY');
+  // ---------------------------------------------------------
+  // PULSING AMBIENT AURA (DEF-025)
+  // ---------------------------------------------------------
+  const pulseScaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseGlowOpacity = useRef(new Animated.Value(0.18)).current;
 
-  // Step 6: Auto-Lock Security & Auto-Delete (DEF-001, DEF-007)
-  const [selectedPreset, setSelectedPreset] = useState<AutoLockPreset>('BALANCED');
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseScaleAnim, {
+            toValue: 1.22,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseScaleAnim, {
+            toValue: 1.0,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pulseGlowOpacity, {
+            toValue: 0.42,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseGlowOpacity, {
+            toValue: 0.14,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [pulseScaleAnim, pulseGlowOpacity]);
+
+  // ---------------------------------------------------------
+  // STEP 5: VAULT SECURITY PRESETS & GUARDRAILS
+  // ---------------------------------------------------------
   const [autoLockOnBlur, setAutoLockOnBlur] = useState(true);
   const [inactivityMinutes, setInactivityMinutes] = useState(5);
+  const [selectedPreset, setSelectedPreset] = useState<AutoLockPreset>('BALANCED');
   const [autoDeleteOnFailedPin, setAutoDeleteOnFailedPin] = useState(false);
   const [autoDeleteThreshold, setAutoDeleteThreshold] = useState(5);
 
-  const STEPS: { id: OnboardingStep; label: string; number: number }[] = [
-    { id: 'IDENTITY', label: 'Identity', number: 1 },
-    { id: 'BANKS', label: 'Banks', number: 2 },
-    { id: 'CARDS', label: 'Cards', number: 3 },
-    { id: 'SALARY', label: 'Income', number: 4 },
-    ...(SHOW_DRIVE_STEP ? [{ id: 'DRIVE' as OnboardingStep, label: 'Drive Sync', number: 5 }] : []),
-    { id: 'SECURITY', label: 'Auto-Lock', number: SHOW_DRIVE_STEP ? 6 : 5 },
-    { id: 'CONFIRMATION', label: 'Ready', number: SHOW_DRIVE_STEP ? 7 : 6 },
+  // ---------------------------------------------------------
+  // STEP 6: PIN SETUP & CONFIRMATION
+  // ---------------------------------------------------------
+  const [pinSubStep, setPinSubStep] = useState<'CREATE' | 'CONFIRM'>('CREATE');
+  const [createdPin, setCreatedPin] = useState<string>('');
+  const [confirmPin, setConfirmPin] = useState<string>('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [isEncryptingPin, setIsEncryptingPin] = useState(false);
+
+  // Physical keyboard support for PIN input on Web
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || currentStep !== 'PIN') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        handleKeypadPress(e.key);
+      } else if (e.key === 'Backspace') {
+        handleKeypadPress('backspace');
+      } else if (e.key === 'Enter') {
+        if (pinSubStep === 'CREATE' && createdPin.length === 4) {
+          setPinSubStep('CONFIRM');
+        } else if (pinSubStep === 'CONFIRM' && confirmPin.length === 4) {
+          handleConfirmPin();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentStep, pinSubStep, createdPin, confirmPin]);
+
+  // Stepper steps definition
+  const STEP_CONFIG = [
+    { id: 'IDENTITY', label: 'Create Identity', num: 1 },
+    { id: 'BANKS', label: 'Bank Accounts', num: 2 },
+    { id: 'CARDS', label: 'Credit Cards', num: 3 },
+    { id: 'INCOME', label: 'Income Streams', num: 4 },
+    { id: 'SECURITY', label: 'Vault Security', num: 5 },
+    { id: 'PIN', label: 'Vault Security PIN', num: 6 },
   ];
 
-  const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
+  const currentStepNumber =
+    currentStep === 'READY'
+      ? 6
+      : STEP_CONFIG.findIndex((s) => s.id === currentStep) + 1;
 
-  // Stepper Back helper
+  // Handle back button
   const handleGoBack = () => {
-    if (currentStepIndex > 0) {
-      setCurrentStep(STEPS[currentStepIndex - 1].id);
+    switch (currentStep) {
+      case 'BANKS':
+        setCurrentStep('IDENTITY');
+        break;
+      case 'CARDS':
+        setCurrentStep('BANKS');
+        break;
+      case 'INCOME':
+        setCurrentStep('CARDS');
+        break;
+      case 'SECURITY':
+        setCurrentStep('INCOME');
+        break;
+      case 'PIN':
+        if (pinSubStep === 'CONFIRM') {
+          setPinSubStep('CREATE');
+          setConfirmPin('');
+          setPinError(null);
+        } else {
+          setCurrentStep('SECURITY');
+        }
+        break;
+      default:
+        break;
     }
   };
 
-  const handleJumpToStep = (targetIdx: number) => {
-    // Only allow clicking to steps that have already been reached
-    if (targetIdx <= currentStepIndex) {
-      setCurrentStep(STEPS[targetIdx].id);
-    }
-  };
-
-  // Validation for Step 1
-  const validateUsername = (val: string): boolean => {
+  // ---------------------------------------------------------
+  // VALIDATIONS & ACTIONS
+  // ---------------------------------------------------------
+  const validateUsernameInput = (val: string): boolean => {
     const res = checkUsername(val);
     if (!res.isValid) {
-      setUsernameError(res.error || 'Invalid username');
+      setUsernameError(res.error || 'Invalid handle');
       return false;
     }
     setUsernameError(null);
     return true;
   };
 
-  const handleNextFromIdentity = () => {
-    if (!validateUsername(username)) return;
-    setCurrentStep('BANKS');
+  // Draft Reset Helpers
+  const resetBankDraft = () => {
+    setEditingBankId(null);
+    setDraftBankType('SAVINGS');
+    setDraftBankName('');
+    setDraftBankNickname('');
+    setDraftBankBalance('');
+    setDraftBankMinBalance('');
   };
 
-  const handleAddBank = () => {
-    if (!newBankName.trim()) return;
-    const bal = parseBalanceInput(newBankBalance, 0);
-    const minBal = parseBalanceInput(newBankMinBalance, 0);
-    setBanks((prev) => [
-      ...prev,
-      {
+  const resetCardDraft = () => {
+    setEditingCardId(null);
+    setDraftCardProvider('');
+    setDraftCardNickname('');
+    setDraftCardNetwork('Visa');
+    setDraftCardLimit('');
+    setDraftCardBalance('');
+    setDraftCardCapRatio(30);
+    setDraftCardCutDay('');
+    setDraftCardDueDay('');
+    setDraftCardColor('EMERALD');
+    setCardCutDayError(null);
+    setCardDueDayError(null);
+  };
+
+  const resetIncomeDraft = () => {
+    setEditingIncomeId(null);
+    setIncomeSheetTab('SALARY');
+    setDraftIncomeSource('');
+    setDraftIncomeAmount('');
+    setDraftIncomeDay(1);
+    setDraftIncomeBank(banks[0]?.name || 'Primary Cash Vault');
+  };
+
+  const handleOpenBankSheet = () => {
+    resetBankDraft();
+    setIsAddBankSheetOpen(true);
+  };
+
+  const handleEditBank = (bank: BankDraft) => {
+    setEditingBankId(bank.id);
+    setDraftBankType(bank.type);
+    setDraftBankName(bank.name);
+    setDraftBankNickname(bank.nickname);
+    setDraftBankBalance(bank.balance > 0 ? String(bank.balance) : '');
+    setDraftBankMinBalance(bank.minBalance > 0 ? String(bank.minBalance) : '');
+    setIsAddBankSheetOpen(true);
+  };
+
+  const handleCloseBankSheet = () => {
+    setIsAddBankSheetOpen(false);
+    resetBankDraft();
+    if (returnToIncomeSheetAfterBank) {
+      setReturnToIncomeSheetAfterBank(false);
+      setIsAddIncomeSheetOpen(true);
+    }
+  };
+
+  const handleOpenCardSheet = () => {
+    resetCardDraft();
+    setIsAddCardSheetOpen(true);
+  };
+
+  const handleEditCard = (card: CardDraft) => {
+    setEditingCardId(card.id);
+    setDraftCardProvider(card.provider);
+    setDraftCardNickname(card.name);
+    setDraftCardNetwork(card.network);
+    setDraftCardLimit(card.limit > 0 ? String(card.limit) : '');
+    setDraftCardBalance(card.balance > 0 ? String(card.balance) : '');
+    setDraftCardCapRatio(card.keepTrackRatio);
+    setDraftCardCutDay(card.cutDay ? String(card.cutDay) : '');
+    setDraftCardDueDay(card.dueDay ? String(card.dueDay) : '');
+    setDraftCardColor(card.color);
+    setIsAddCardSheetOpen(true);
+  };
+
+  const handleCloseCardSheet = () => {
+    setIsAddCardSheetOpen(false);
+    resetCardDraft();
+  };
+
+  const handleOpenIncomeSheet = () => {
+    resetIncomeDraft();
+    setIsAddIncomeSheetOpen(true);
+  };
+
+  const handleEditIncomeStream = (stream: IncomeStreamDraft) => {
+    setEditingIncomeId(stream.id);
+    setIncomeSheetTab(stream.category === 'Salaried Paycheck' ? 'SALARY' : 'FREELANCE');
+    setDraftIncomeSource(stream.sourceName);
+    setDraftIncomeAmount(stream.amount > 0 ? String(stream.amount) : '');
+    setDraftIncomeDay(stream.dayOfMonth);
+    setDraftIncomeBank(stream.bankAccountId || banks[0]?.name || 'Primary Cash Vault');
+    setIsAddIncomeSheetOpen(true);
+  };
+
+  const handleCloseIncomeSheet = () => {
+    setIsAddIncomeSheetOpen(false);
+    resetIncomeDraft();
+  };
+
+  const handleOpenBankFromIncome = () => {
+    setReturnToIncomeSheetAfterBank(true);
+    setIsAddIncomeSheetOpen(false);
+    handleOpenBankSheet();
+  };
+
+  // Add / Update Bank
+  const handleSaveBankDraft = () => {
+    if (!draftBankName.trim()) return;
+    if (editingBankId) {
+      setBanks((prev) =>
+        prev.map((b) =>
+          b.id === editingBankId
+            ? {
+                ...b,
+                name: draftBankName.trim(),
+                type: draftBankType,
+                nickname: draftBankNickname.trim() || `${draftBankName.trim()} Account`,
+                balance: parseBalanceInput(draftBankBalance, 0),
+                minBalance: parseBalanceInput(draftBankMinBalance, 0),
+              }
+            : b
+        )
+      );
+      setEditingBankId(null);
+    } else {
+      const newBank: BankDraft = {
         id: 'b-' + Date.now(),
-        name: newBankName.trim(),
-        balance: bal,
-        minBalance: minBal,
-      },
-    ]);
-    setNewBankName('');
-    setNewBankBalance('');
-    setNewBankMinBalance('');
+        name: draftBankName.trim(),
+        type: draftBankType,
+        nickname: draftBankNickname.trim() || `${draftBankName.trim()} Account`,
+        balance: parseBalanceInput(draftBankBalance, 0),
+        minBalance: parseBalanceInput(draftBankMinBalance, 0),
+      };
+      setBanks((prev) => [...prev, newBank]);
+      setDraftIncomeBank(newBank.name);
+    }
+    resetBankDraft();
+    setIsAddBankSheetOpen(false);
+    if (returnToIncomeSheetAfterBank) {
+      setReturnToIncomeSheetAfterBank(false);
+      setIsAddIncomeSheetOpen(true);
+    }
   };
 
   const handleRemoveBank = (id: string) => {
     setBanks((prev) => prev.filter((b) => b.id !== id));
   };
 
-  const validateCutDayInput = (val: string): boolean => {
-    const res = validateCalendarDay(val);
-    if (!res.isValid) {
-      setCardCutDayError(res.error || 'Day must be between 1 and 31');
-      return false;
+  // Add / Update Card
+  const handleSaveCardDraft = () => {
+    if (!draftCardProvider.trim()) return;
+    const isCutValid = validateCalendarDay(draftCardCutDay).isValid;
+    const isDueValid = validateCalendarDay(draftCardDueDay).isValid;
+    if (!isCutValid) {
+      setCardCutDayError('Day must be 1 to 31');
+      return;
     }
-    setCardCutDayError(null);
-    return true;
-  };
-
-  const validateDueDayInput = (val: string): boolean => {
-    const res = validateCalendarDay(val);
-    if (!res.isValid) {
-      setCardDueDayError(res.error || 'Day must be between 1 and 31');
-      return false;
+    if (!isDueValid) {
+      setCardDueDayError('Day must be 1 to 31');
+      return;
     }
-    setCardDueDayError(null);
-    return true;
-  };
 
-  const handleAddCard = () => {
-    if (!newCardName.trim()) return;
-    const isCutValid = validateCutDayInput(newCardCutDay);
-    const isDueValid = validateDueDayInput(newCardDueDay);
-    if (!isCutValid || !isDueValid) return;
-
-    const lim = parseBalanceInput(newCardLimit, 100000);
-    const bal = parseBalanceInput(newCardBalance, 0);
-    const cut = clampCalendarDay(newCardCutDay, 15);
-    const due = clampCalendarDay(newCardDueDay, 5);
-    const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
-    setCards((prev) => [
-      ...prev,
-      {
+    if (editingCardId) {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === editingCardId
+            ? {
+                ...c,
+                provider: draftCardProvider.trim(),
+                name: draftCardNickname.trim() || draftCardProvider.trim(),
+                network: draftCardNetwork,
+                limit: parseBalanceInput(draftCardLimit, 100000),
+                balance: parseBalanceInput(draftCardBalance, 0),
+                cutDay: clampCalendarDay(draftCardCutDay, 15),
+                dueDay: clampCalendarDay(draftCardDueDay, 5),
+                keepTrackRatio: validateKeepTrackRatio(draftCardCapRatio),
+                color: draftCardColor,
+              }
+            : c
+        )
+      );
+      setEditingCardId(null);
+    } else {
+      const newCard: CardDraft = {
         id: 'c-' + Date.now(),
-        name: newCardName.trim(),
-        limit: lim,
-        balance: bal,
-        cutDay: cut,
-        dueDay: due,
-        keepTrackRatio: ratio,
-        color: newCardColor,
-      },
-    ]);
-    setNewCardName('');
-    setNewCardLimit('');
-    setNewCardBalance('');
-    setNewCardCutDay('15');
-    setNewCardDueDay('5');
-    setNewCardKeepTrackRatio(50);
+        provider: draftCardProvider.trim(),
+        name: draftCardNickname.trim() || draftCardProvider.trim(),
+        network: draftCardNetwork,
+        limit: parseBalanceInput(draftCardLimit, 100000),
+        balance: parseBalanceInput(draftCardBalance, 0),
+        cutDay: clampCalendarDay(draftCardCutDay, 15),
+        dueDay: clampCalendarDay(draftCardDueDay, 5),
+        keepTrackRatio: validateKeepTrackRatio(draftCardCapRatio),
+        color: draftCardColor,
+      };
+      setCards((prev) => [...prev, newCard]);
+    }
+    resetCardDraft();
+    setIsAddCardSheetOpen(false);
     setCardCutDayError(null);
     setCardDueDayError(null);
   };
@@ -231,129 +477,98 @@ export const OnboardingScreen: React.FC = () => {
     setCards((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const handleSelectPreset = (preset: AutoLockPreset) => {
-    setSelectedPreset(preset);
-    switch (preset) {
-      case 'HIGH':
-        setAutoLockOnBlur(true);
-        setInactivityMinutes(1);
-        break;
-      case 'BALANCED':
-        setAutoLockOnBlur(true);
-        setInactivityMinutes(5);
-        break;
-      case 'RELAXED':
-        setAutoLockOnBlur(false);
-        setInactivityMinutes(15);
-        break;
-      case 'EXTENDED':
-        setAutoLockOnBlur(false);
-        setInactivityMinutes(30);
-        break;
-      case 'CUSTOM':
-        break;
+  // Add / Update Income Stream
+  const handleSaveIncomeDraft = () => {
+    if (!draftIncomeSource.trim()) return;
+    const amountVal = parseBalanceInput(draftIncomeAmount, 0);
+    const categoryName = incomeSheetTab === 'SALARY' ? 'Salaried Paycheck' : 'Freelance / Other';
+    if (editingIncomeId) {
+      setIncomeStreams((prev) =>
+        prev.map((s) =>
+          s.id === editingIncomeId
+            ? {
+                ...s,
+                sourceName: draftIncomeSource.trim(),
+                category: categoryName,
+                amount: amountVal,
+                dayOfMonth: clampCalendarDay(draftIncomeDay || 1, 1),
+                bankAccountId: draftIncomeBank || (banks[0]?.name ?? 'Primary Cash Vault'),
+              }
+            : s
+        )
+      );
+      setEditingIncomeId(null);
+    } else {
+      const newStream: IncomeStreamDraft = {
+        id: 'inc-' + Date.now(),
+        sourceName: draftIncomeSource.trim(),
+        category: categoryName,
+        amount: amountVal,
+        dayOfMonth: clampCalendarDay(draftIncomeDay || 1, 1),
+        bankAccountId: draftIncomeBank || (banks[0]?.name ?? 'Primary Cash Vault'),
+      };
+      setIncomeStreams((prev) => [...prev, newStream]);
+    }
+    resetIncomeDraft();
+    setIsAddIncomeSheetOpen(false);
+  };
+
+  const handleRemoveIncomeStream = (id: string) => {
+    setIncomeStreams((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  // Keypad handling for PIN
+  const handleKeypadPress = (key: string) => {
+    setPinError(null);
+    const activePin = pinSubStep === 'CREATE' ? createdPin : confirmPin;
+    const setPin = pinSubStep === 'CREATE' ? setCreatedPin : setConfirmPin;
+
+    if (key === 'backspace') {
+      if (activePin.length > 0) {
+        setPin(activePin.slice(0, -1));
+      }
+    } else if (key >= '0' && key <= '9') {
+      if (activePin.length < 4) {
+        const next = activePin + key;
+        setPin(next);
+      }
     }
   };
 
-  const handleContinueFromBanks = () => {
-    if (newBankName.trim()) {
-      const bal = parseBalanceInput(newBankBalance, 0);
-      const minBal = parseBalanceInput(newBankMinBalance, 0);
-      setBanks((prev) => [
-        ...prev,
-        {
-          id: 'b-' + Date.now(),
-          name: newBankName.trim(),
-          balance: bal,
-          minBalance: minBal,
-        },
-      ]);
-      setNewBankName('');
-      setNewBankBalance('');
-      setNewBankMinBalance('');
+  // Confirm PIN & Advance to Ready Screen
+  const handleConfirmPin = async () => {
+    if (confirmPin !== createdPin) {
+      setPinError('PINs do not match. Please re-enter.');
+      setConfirmPin('');
+      return;
     }
-    setCurrentStep('CARDS');
+
+    setIsEncryptingPin(true);
+    try {
+      await setupPin(createdPin);
+      setTimeout(() => {
+        setIsEncryptingPin(false);
+        setCurrentStep('READY');
+      }, 600);
+    } catch (e) {
+      console.error('[Onboarding] Error during PIN setup:', e);
+      setIsEncryptingPin(false);
+      setCurrentStep('READY');
+    }
   };
 
-  const handleContinueFromCards = () => {
-    if (newCardName.trim()) {
-      const isCutValid = validateCutDayInput(newCardCutDay);
-      const isDueValid = validateDueDayInput(newCardDueDay);
-      if (!isCutValid || !isDueValid) return;
-
-      const lim = parseBalanceInput(newCardLimit, 100000);
-      const bal = parseBalanceInput(newCardBalance, 0);
-      const cut = clampCalendarDay(newCardCutDay, 15);
-      const due = clampCalendarDay(newCardDueDay, 5);
-      const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
-      setCards((prev) => [
-        ...prev,
-        {
-          id: 'c-' + Date.now(),
-          name: newCardName.trim(),
-          limit: lim,
-          balance: bal,
-          cutDay: cut,
-          dueDay: due,
-          keepTrackRatio: ratio,
-          color: newCardColor,
-        },
-      ]);
-      setNewCardName('');
-      setNewCardLimit('');
-      setNewCardBalance('');
-      setNewCardCutDay('15');
-      setNewCardDueDay('5');
-      setNewCardKeepTrackRatio(50);
-      setCardCutDayError(null);
-      setCardDueDayError(null);
-    }
-    setCurrentStep('SALARY');
-  };
-
+  // Final Launch Spendly Vault
   const handleFinishOnboarding = async () => {
     setIsFinishing(true);
     try {
-      // Auto-commit any trailing entered bank or card if user didn't hit + Add
-      const allBanks = [...banks];
-      if (newBankName.trim()) {
-        const bal = parseBalanceInput(newBankBalance, 0);
-        const minBal = parseBalanceInput(newBankMinBalance, 0);
-        allBanks.push({
-          id: 'b-' + Date.now(),
-          name: newBankName.trim(),
-          balance: bal,
-          minBalance: minBal,
-        });
-      }
-
-      const allCards = [...cards];
-      if (newCardName.trim()) {
-        const lim = parseBalanceInput(newCardLimit, 100000);
-        const bal = parseBalanceInput(newCardBalance, 0);
-        const cut = clampCalendarDay(newCardCutDay, 15);
-        const due = clampCalendarDay(newCardDueDay, 5);
-        const ratio = validateKeepTrackRatio(newCardKeepTrackRatio);
-        allCards.push({
-          id: 'c-' + Date.now(),
-          name: newCardName.trim(),
-          limit: lim,
-          balance: bal,
-          cutDay: cut,
-          dueDay: due,
-          keepTrackRatio: ratio,
-          color: newCardColor,
-        });
-      }
-
-      // 1. Initialize user database vault with EXACT user banks & cards (purges all dummy seed accounts & placeholder txs)
+      // 1. Initialize SQLite Database with user accounts
       await initializeUserVault(
-        allBanks.map((b) => ({
-          name: b.name,
+        banks.map((b) => ({
+          name: b.name + (b.nickname ? ` (${b.nickname})` : ''),
           balance: b.balance,
           minimum_balance: b.minBalance,
         })),
-        allCards.map((c) => ({
+        cards.map((c) => ({
           name: c.name,
           limit: c.limit,
           balance: c.balance,
@@ -364,32 +579,24 @@ export const OnboardingScreen: React.FC = () => {
         }))
       );
 
-      // 2. Update User Profile
+      // 2. Update user profile
       const cleanUsername = username.trim().toLowerCase().replace(/^@/, '');
+      const primaryStream = incomeStreams[0];
       const profileUpdates: Partial<UserProfile> = {
         name: displayName.trim() || cleanUsername || 'User',
         username: cleanUsername,
         handle: `@${cleanUsername}`,
         email: email.trim(),
         avatar,
-        salary_amount: incomeType === 'SALARIED' ? parseBalanceInput(salaryAmount, 0) : 0,
-        salary_day: incomeType === 'SALARIED' ? clampCalendarDay(salaryDay, 1) : 1,
-        salary_account_id: selectedSalaryBank || (banks[0]?.name ?? ''),
-        driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
+        salary_amount: primaryStream ? primaryStream.amount : 0,
+        salary_day: primaryStream ? primaryStream.dayOfMonth : 1,
+        salary_account_id: primaryStream ? primaryStream.bankAccountId : (banks[0]?.name ?? ''),
+        driveFolderName: 'Aegis Spendly',
         isOnboarded: true,
       };
       updateProfile(profileUpdates);
 
-      // 3. Update Google Sync preferences
-      updateSyncConfig({
-        driveFolderName: driveFolderName.trim() || 'Aegis Spendly',
-        cadence: syncCadence,
-        dailyTime,
-        weeklyDay,
-        googleEmail: email.trim(),
-      });
-
-      // 4. Update Security settings
+      // 3. Update security config
       updateSecurityConfig({
         autoLockOnBlur,
         inactivityTimeoutMinutes: inactivityMinutes,
@@ -398,1307 +605,2084 @@ export const OnboardingScreen: React.FC = () => {
         autoDeleteThreshold,
       });
 
-      // 5. Complete auth onboarding
+      // 4. Complete auth onboarding
       completeOnboarding({
         username: cleanUsername,
         name: displayName.trim(),
         email: email.trim(),
       });
     } catch (e) {
-      console.error('[Onboarding] Error during completion:', e);
+      console.error('[Onboarding] Error finishing vault setup:', e);
       completeOnboarding({ username: username.trim() });
     } finally {
       setIsFinishing(false);
     }
   };
 
-  const avatarOptions: { id: AvatarId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { id: 'Moon cat', label: 'Moon cat', icon: 'paw' },
-    { id: 'Forest rabbit', label: 'Forest rabbit', icon: 'leaf' },
-    { id: 'Little ghost', label: 'Little ghost', icon: 'happy' },
-    { id: 'Star mage', label: 'Star mage', icon: 'sparkles' },
-  ];
+  // Total liquid calculation
+  const totalLiquidCash = banks.reduce((sum, b) => sum + b.balance, 0);
 
-  // Threshold preview values for the slider in Step 3
-  const greenThreshold = Math.round(newCardKeepTrackRatio * 0.5);
-  const yellowThreshold = newCardKeepTrackRatio;
+  // Total card balance vs limit
+  const totalCardSpent = cards.reduce((sum, c) => sum + c.balance, 0);
+  const totalCardLimit = cards.reduce((sum, c) => sum + c.limit, 0);
+  const cardUtilizationPct = totalCardLimit > 0 ? Math.round((totalCardSpent / totalCardLimit) * 100) : 0;
+
+  // Total income inflow
+  const totalMonthlyInflow = incomeStreams.reduce((sum, s) => sum + s.amount, 0);
+
+  // Active PIN displayed
+  const currentPinDigits = pinSubStep === 'CREATE' ? createdPin : confirmPin;
+
+  // Render header
+  const renderHeader = () => {
+    if (currentStep === 'READY') return null;
+
+    const currentConfig = STEP_CONFIG.find((s) => s.id === currentStep);
+
+    return (
+      <View style={styles.fixedHeader}>
+        <View style={styles.headerTopRow}>
+          {currentStepNumber > 1 ? (
+            <TouchableOpacity
+              onPress={handleGoBack}
+              style={styles.headerBackBtn}
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 38 }} />
+          )}
+
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+            {currentConfig?.label || 'Onboarding'}
+          </Text>
+
+          <View style={[styles.stepPill, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.stepPillText, { color: colors.textPrimary }]}>
+              {currentStepNumber} of 6
+            </Text>
+          </View>
+        </View>
+
+        {/* 6-segment stepper progress bar */}
+        <View style={styles.stepperBarRow}>
+          {STEP_CONFIG.map((s, idx) => {
+            const isFilled = idx < currentStepNumber;
+            const isCurrent = idx === currentStepNumber - 1;
+            return (
+              <View
+                key={s.id}
+                style={[
+                  styles.stepperSegment,
+                  {
+                    backgroundColor: isFilled ? colors.primary : '#1C2B3C',
+                    shadowColor: isCurrent ? colors.primary : 'transparent',
+                    shadowOpacity: isCurrent ? 0.6 : 0,
+                    shadowRadius: 6,
+                  },
+                ]}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={[styles.scrollRoot, { padding: isDesktop ? 16 : 10 }]} showsVerticalScrollIndicator={false}>
-        <View style={[styles.container, { maxWidth: isDesktop ? 680 : '100%' }]}>
-          {/* Header Stepper Navigation */}
-          <View style={styles.stepperRow}>
-            {STEPS.map((s, idx) => {
-              const isDone = idx < currentStepIndex;
-              const isCurrent = idx === currentStepIndex;
-              const canClick = idx <= currentStepIndex;
-              return (
-                <View key={s.id} style={styles.stepIndicatorItem}>
-                  <TouchableOpacity
-                    disabled={!canClick}
-                    onPress={() => handleJumpToStep(idx)}
-                    style={[
-                      styles.stepDot,
-                      {
-                        backgroundColor: isDone || isCurrent ? colors.primary : colors.surface,
-                        borderColor: isDone || isCurrent ? colors.primary : colors.borderSubtle,
-                      },
-                    ]}
-                  >
-                    {isDone ? (
-                      <Ionicons name="checkmark" size={11} color="#FFFFFF" />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.stepDotText,
-                          { color: isCurrent ? '#FFFFFF' : colors.textMuted },
-                        ]}
-                      >
-                        {s.number}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  {idx < STEPS.length - 1 && (
-                    <View
-                      style={[
-                        styles.stepConnector,
-                        { backgroundColor: isDone ? colors.primary : colors.borderSubtle },
-                      ]}
-                    />
+    <View style={[styles.root, { backgroundColor: '#051424' }]}>
+      {renderHeader()}
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: currentStep === 'READY' ? 24 : 96,
+            paddingBottom: currentStep === 'READY' ? 32 : 100,
+            maxWidth: isDesktop ? 540 : '100%',
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ========================================================= */}
+        {/* STEP 1: CREATE IDENTITY */}
+        {/* ========================================================= */}
+        {currentStep === 'IDENTITY' && (
+          <View style={styles.stepContainer}>
+            {/* Identity Form Card */}
+            <View style={[styles.obsidianCard, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+              {/* Field 1: Display Name */}
+              <View style={styles.formGroup}>
+                <View style={styles.fieldHeaderRow}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>DISPLAY NAME</Text>
+                  <Text style={[styles.fieldHint, { color: '#64748B' }]}>Visible to contacts</Text>
+                </View>
+                <View style={[styles.inputBox, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                  <Ionicons name="person-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={[styles.textInput, { color: '#D4E4FA' }]}
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    placeholder="Alex Morgan"
+                    placeholderTextColor="#64748B"
+                  />
+                  {displayName.length > 0 && (
+                    <TouchableOpacity onPress={() => setDisplayName('')} style={styles.clearBtn}>
+                      <Ionicons name="close" size={14} color="#94A3B8" />
+                    </TouchableOpacity>
                   )}
                 </View>
-              );
-            })}
-          </View>
+              </View>
 
-          {/* Main Content Card */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.borderSubtle,
-                padding: isDesktop ? 24 : 16,
-              },
-            ]}
-          >
-            {/* STEP 1: IDENTITY & USERNAME */}
-            {currentStep === 'IDENTITY' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                  <Ionicons name="shield-checkmark" size={14} color="#059669" style={{ marginRight: 6 }} />
-                  <Text style={styles.badgePillText}>STEP 1 • IDENTITY & PROFILE</Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Aegis Spendly</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Let's personalize your ledger. All data is kept strictly on-device, fully encrypted and 100% offline.
-                </Text>
-
-                {/* Username Field (MANDATORY) */}
-                <View style={styles.formGroup}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>
-                      VAULT USERNAME <Text style={{ color: '#DC2626' }}>*</Text>
-                    </Text>
-                    <Text style={[styles.helper, { color: colors.textMuted }]}>Mandatory (Cannot be skipped)</Text>
+              {/* Field 2: Username Handle */}
+              <View style={styles.formGroup}>
+                <View style={styles.fieldHeaderRow}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>USERNAME HANDLE</Text>
+                  <View style={[styles.availableBadge, { backgroundColor: 'rgba(75, 226, 119, 0.1)', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                    <View style={[styles.smallGreenDot, { backgroundColor: colors.primary }]} />
+                    <Text style={[styles.availableText, { color: colors.primary }]}>Available</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.inputWrap,
-                      {
-                        borderColor: usernameError ? '#DC2626' : colors.border,
-                        backgroundColor: colors.background,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.atSign, { color: colors.primary }]}>@</Text>
+                </View>
+                <View
+                  style={[
+                    styles.inputBox,
+                    {
+                      backgroundColor: '#0D1C2D',
+                      borderColor: usernameError ? '#EF4444' : '#1C2B3C',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.atPrefix, { color: colors.primary }]}>@</Text>
+                  <TextInput
+                    style={[styles.textInput, { color: '#D4E4FA' }]}
+                    value={username}
+                    onChangeText={(val) => {
+                      setUsername(val);
+                      validateUsernameInput(val);
+                    }}
+                    placeholder="username"
+                    placeholderTextColor="#64748B"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                </View>
+                {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
+
+                {/* Validation Tags */}
+                <View style={styles.tagChipsRow}>
+                  <View style={[styles.ruleChip, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                    <Ionicons name="checkmark" size={12} color={colors.primary} />
+                    <Text style={styles.ruleChipText}>lowercase</Text>
+                  </View>
+                  <View style={[styles.ruleChip, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                    <Ionicons name="checkmark" size={12} color={colors.primary} />
+                    <Text style={styles.ruleChipText}>3–20 chars</Text>
+                  </View>
+                  <View style={[styles.ruleChip, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                    <Ionicons name="checkmark" size={12} color={colors.primary} />
+                    <Text style={styles.ruleChipText}>no spaces</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Field 3: Account Email */}
+              <View style={[styles.formGroup, { borderTopWidth: 1, borderTopColor: '#1C2B3C', paddingTop: 14 }]}>
+                <View style={styles.fieldHeaderRow}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>ACCOUNT EMAIL</Text>
+                  {user?.email ? (
+                    <View style={[styles.readonlyPill, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                      <Ionicons name="lock-closed" size={10} color="#94A3B8" />
+                      <Text style={styles.readonlyText}>Verified Credential</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.readonlyPill, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                      <Ionicons name="mail-outline" size={10} color={colors.primary} />
+                      <Text style={[styles.readonlyText, { color: colors.primary }]}>Local Vault ID</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.inputBox, { backgroundColor: user?.email ? 'rgba(13, 28, 45, 0.7)' : '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                  <Ionicons name="mail-outline" size={16} color="#94A3B8" style={{ marginRight: 10 }} />
+                  {user?.email ? (
+                    <Text style={[styles.readOnlyEmailText, { color: '#94A3B8' }]}>{email}</Text>
+                  ) : (
                     <TextInput
-                      style={[styles.input, { color: colors.textPrimary }]}
-                      value={username}
-                      onChangeText={(val) => {
-                        setUsername(val);
-                        validateUsername(val);
-                      }}
-                      placeholder="your_unique_username"
-                      placeholderTextColor={colors.textMuted}
+                      style={[styles.textInput, { color: '#D4E4FA', flex: 1 }]}
+                      value={email}
+                      onChangeText={setEmail}
+                      placeholder="alex@example.com"
+                      placeholderTextColor="#64748B"
+                      keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
                     />
-                  </View>
-                  {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
-                </View>
-
-                {/* Display Name Field */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>FULL NAME / DISPLAY NAME</Text>
-                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                    <Ionicons name="person-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                    <TextInput
-                      style={[styles.input, { color: colors.textPrimary }]}
-                      value={displayName}
-                      onChangeText={setDisplayName}
-                      placeholder="Your Full Name"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                </View>
-
-                {/* Email Field */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>
-                    ACCOUNT EMAIL (OPTIONAL ALERTS & NOTIFICATIONS)
-                  </Text>
-                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                    <Ionicons name="mail-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
-                    <TextInput
-                      style={[styles.input, { color: colors.textPrimary }]}
-                      value={email}
-                      onChangeText={setEmail}
-                      placeholder="you@gmail.com"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                  </View>
-                </View>
-
-                {/* Avatar Selector */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>CHOOSE VAULT AVATAR</Text>
-                  <View style={styles.avatarGrid}>
-                    {avatarOptions.map((opt) => {
-                      const isSelected = avatar === opt.id;
-                      return (
-                        <TouchableOpacity
-                          key={opt.id}
-                          style={[
-                            styles.avatarOption,
-                            {
-                              borderColor: isSelected ? colors.primary : colors.border,
-                              backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                            },
-                          ]}
-                          onPress={() => setAvatar(opt.id)}
-                        >
-                          <Ionicons
-                            name={opt.icon}
-                            size={18}
-                            color={isSelected ? colors.primary : colors.textSecondary}
-                            style={{ marginRight: 6 }}
-                          />
-                          <Text
-                            style={[
-                              styles.avatarLabel,
-                              { color: isSelected ? colors.primary : colors.textPrimary },
-                            ]}
-                          >
-                            {opt.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Continue CTA */}
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleNextFromIdentity}
-                >
-                  <Text style={styles.primaryBtnText}>Continue to Bank Accounts</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* STEP 2: BANK ACCOUNTS (STARTS EMPTY, FULL DATA ENTRY) */}
-            {currentStep === 'BANKS' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
-                  <Ionicons name="business" size={14} color="#7C3AED" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#6D28D9' }]}>STEP 2 • BANK ACCOUNTS & WALLETS</Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Bank Accounts</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Record your liquid accounts, cash balances, and minimum required balances.
-                </Text>
-
-                {/* List of User's Added Banks */}
-                {banks.length === 0 ? (
-                  <View style={[styles.emptyNoticeBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                    <Ionicons name="wallet-outline" size={28} color={colors.textMuted} style={{ marginBottom: 6 }} />
-                    <Text style={[styles.emptyNoticeTitle, { color: colors.textPrimary }]}>No Banks Added Yet</Text>
-                    <Text style={[styles.emptyNoticeSub, { color: colors.textMuted }]}>
-                      Fill in your bank account details below, or click "Skip for now" to add them later.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ marginBottom: 16 }}>
-                    {banks.map((b) => (
-                      <View
-                        key={b.id}
-                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
-                      >
-                        <View style={[styles.itemIconBox, { backgroundColor: '#DCFCE7' }]}>
-                          <Ionicons name="business-outline" size={16} color="#15803D" />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{b.name}</Text>
-                          <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                            Current: {formatRupee(b.balance)} • Min Required: {formatRupee(b.minBalance)}
-                          </Text>
-                        </View>
-                        <TouchableOpacity onPress={() => handleRemoveBank(b.id)} style={styles.removeBtn}>
-                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Full Form: Add A Bank Account */}
-                <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                  <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>+ Add A Bank Account</Text>
-
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BANK NICKNAME / ACCOUNT NAME</Text>
-                    <TextInput
-                      style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                      placeholder="e.g. HDFC Salary, SBI Savings, Cash Wallet"
-                      placeholderTextColor={colors.textMuted}
-                      value={newBankName}
-                      onChangeText={setNewBankName}
-                    />
-                  </View>
-
-                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT BALANCE (₹)</Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="e.g. 50000"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newBankBalance}
-                        onChangeText={setNewBankBalance}
-                      />
-                    </View>
-
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>MINIMUM BALANCE REQUIRED (₹)</Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="0 (Optional)"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newBankMinBalance}
-                        onChangeText={setNewBankMinBalance}
-                      />
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.addCardBtn, { backgroundColor: colors.primary }]}
-                    onPress={handleAddBank}
-                  >
-                    <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.addCardBtnText}>Add This Bank</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Bottom Navigation with Back, Skip, Continue */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('CARDS')}>
-                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                      onPress={handleContinueFromBanks}
-                    >
-                      <Text style={styles.primaryBtnText}>Continue to Cards</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                  </View>
+                  )}
                 </View>
               </View>
-            )}
 
-            {/* STEP 3: CREDIT CARDS (STARTS EMPTY, CLEAR LABELED FORM & TRACK SLIDER) */}
-            {currentStep === 'CARDS' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                  <Ionicons name="card" size={14} color="#D97706" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#B45309' }]}>STEP 3 • CREDIT CARDS</Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Add Your Credit Cards</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Set your credit limits, billing statement cut-off days, due dates, and custom utilization thresholds.
-                </Text>
-
-                {/* List of User's Added Cards */}
-                {cards.length === 0 ? (
-                  <View style={[styles.emptyNoticeBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                    <Ionicons name="card-outline" size={28} color={colors.textMuted} style={{ marginBottom: 6 }} />
-                    <Text style={[styles.emptyNoticeTitle, { color: colors.textPrimary }]}>No Credit Cards Added Yet</Text>
-                    <Text style={[styles.emptyNoticeSub, { color: colors.textMuted }]}>
-                      Add your cards using the labeled form below, or click "Skip for now" if you don't use credit cards.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ marginBottom: 16 }}>
-                    {cards.map((c) => (
-                      <View
-                        key={c.id}
-                        style={[styles.itemCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}
-                      >
-                        <View style={[styles.itemIconBox, { backgroundColor: '#FEF3C7' }]}>
-                          <Ionicons name="card-outline" size={16} color="#B45309" />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{c.name}</Text>
-                          <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                            Limit: {formatRupee(c.limit)} • Bill Cut: {c.cutDay}th • Due: {c.dueDay}th • Track Ratio: {c.keepTrackRatio}%
-                          </Text>
-                        </View>
-                        <TouchableOpacity onPress={() => handleRemoveCard(c.id)} style={styles.removeBtn}>
-                          <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Full Form: Add A Credit Card with Clear Labels */}
-                <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                  <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>+ Add A Credit Card</Text>
-
-                  {/* 1. Card Nickname */}
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CARD NICKNAME / BANK</Text>
-                    <TextInput
-                      style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                      placeholder="e.g. HDFC Regalia Gold, Amazon Pay ICICI, Tata Neu"
-                      placeholderTextColor={colors.textMuted}
-                      value={newCardName}
-                      onChangeText={setNewCardName}
-                    />
-                  </View>
-
-                  {/* 2. Limit & Current Outstanding Balance */}
-                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TOTAL CREDIT LIMIT (₹)</Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="e.g. 200000"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newCardLimit}
-                        onChangeText={setNewCardLimit}
-                      />
-                    </View>
-
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT OUTSTANDING / SPENT (₹)</Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        placeholder="0 (Optional)"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newCardBalance}
-                        onChangeText={setNewCardBalance}
-                      />
-                    </View>
-                  </View>
-
-                  {/* 3. Statement Cut Day & Due Date */}
-                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BILL STATEMENT CUT-OFF DAY (1 - 31)</Text>
-                      <TextInput
-                        style={[
-                          styles.fieldInput,
-                          {
-                            borderColor: cardCutDayError ? '#DC2626' : colors.border,
-                            color: colors.textPrimary,
-                          },
-                        ]}
-                        placeholder="e.g. 15 (15th of month)"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newCardCutDay}
-                        onChangeText={(val) => {
-                          setNewCardCutDay(val);
-                          validateCutDayInput(val);
-                        }}
-                      />
-                      {cardCutDayError && <Text style={styles.errorText}>{cardCutDayError}</Text>}
-                    </View>
-
-                    <View style={[styles.formField, { flex: 1 }]}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>PAYMENT DUE DATE (1 - 31)</Text>
-                      <TextInput
-                        style={[
-                          styles.fieldInput,
-                          {
-                            borderColor: cardDueDayError ? '#DC2626' : colors.border,
-                            color: colors.textPrimary,
-                          },
-                        ]}
-                        placeholder="e.g. 5 (5th of next month)"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        value={newCardDueDay}
-                        onChangeText={(val) => {
-                          setNewCardDueDay(val);
-                          validateDueDayInput(val);
-                        }}
-                      />
-                      {cardDueDayError && <Text style={styles.errorText}>{cardDueDayError}</Text>}
-                    </View>
-                  </View>
-
-                  {/* 4. KEEP TRACK RATIO SLIDER (Smooth interactive slider) */}
-                  <View style={[styles.sliderBox, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={[styles.sliderHeader, { color: colors.textPrimary }]}>
-                        Target Max Utilization (Keep Track Ratio)
-                      </Text>
-                      <View style={[styles.ratioBadge, { backgroundColor: colors.primaryLight }]}>
-                        <Text style={[styles.ratioBadgeText, { color: colors.primary }]}>{newCardKeepTrackRatio}%</Text>
-                      </View>
-                    </View>
-
-                    <Text style={[styles.sliderSub, { color: colors.textMuted }]}>
-                      Choose your comfort ceiling. Amber caution activates halfway to this target.
-                    </Text>
-
-                    {/* Smooth Slider Control (Web standard HTML range slider + quick preset pills) */}
-                    {Platform.OS === 'web' && typeof document !== 'undefined' ? (
-                      <View style={{ marginVertical: 10 }}>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="5"
-                          value={newCardKeepTrackRatio}
-                          onChange={(e: any) => setNewCardKeepTrackRatio(validateKeepTrackRatio(e.target.value))}
-                          style={{
-                            width: '100%',
-                            height: '8px',
-                            borderRadius: '4px',
-                            background: `linear-gradient(to right, #10B981 0%, #10B981 ${greenThreshold}%, #F59E0B ${greenThreshold}%, #F59E0B ${yellowThreshold}%, #EF4444 ${yellowThreshold}%, #EF4444 100%)`,
-                            outline: 'none',
-                            cursor: 'pointer',
-                          }}
-                        />
-                      </View>
-                    ) : null}
-
-                    {/* Quick Preset Buttons for Mobile or Quick Click */}
-                    <View style={styles.quickRatioRow}>
-                      {[0, 30, 50, 75, 100].map((pct) => (
-                        <TouchableOpacity
-                          key={pct}
-                          style={[
-                            styles.quickRatioBtn,
-                            {
-                              backgroundColor: newCardKeepTrackRatio === pct ? colors.primary : colors.background,
-                              borderColor: newCardKeepTrackRatio === pct ? colors.primary : colors.borderSubtle,
-                            },
-                          ]}
-                          onPress={() => setNewCardKeepTrackRatio(pct)}
-                        >
-                          <Text
-                            style={[
-                              styles.quickRatioBtnText,
-                              { color: newCardKeepTrackRatio === pct ? '#FFFFFF' : colors.textPrimary },
-                            ]}
-                          >
-                            {pct}%
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    {/* Dynamic Threshold Legend */}
-                    <View style={styles.thresholdLegend}>
-                      <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
-                          Green (Safe): <Text style={{ color: '#10B981', fontWeight: '700' }}>0% – {greenThreshold}%</Text>
-                        </Text>
-                      </View>
-                      <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
-                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
-                          Amber (Caution): <Text style={{ color: '#B45309', fontWeight: '700' }}>{greenThreshold}% – {yellowThreshold}%</Text>
-                        </Text>
-                      </View>
-                      <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
-                          Red (Alert): <Text style={{ color: '#EF4444', fontWeight: '700' }}>&gt; {yellowThreshold}%</Text>
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* 5. Card Skin Theme */}
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CARD VISUAL THEME</Text>
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                      {[
-                        { id: 'EMERALD' as const, label: 'Emerald', color: '#0F4C3A' },
-                        { id: 'PURPLE' as const, label: 'Purple', color: '#581C87' },
-                        { id: 'CARAMEL' as const, label: 'Caramel', color: '#78350F' },
-                      ].map((sk) => (
-                        <TouchableOpacity
-                          key={sk.id}
-                          style={[
-                            styles.skinOption,
-                            {
-                              borderColor: newCardColor === sk.id ? colors.primary : colors.borderSubtle,
-                              backgroundColor: newCardColor === sk.id ? colors.primaryLight : colors.surface,
-                            },
-                          ]}
-                          onPress={() => setNewCardColor(sk.id)}
-                        >
-                          <View style={[styles.skinDot, { backgroundColor: sk.color }]} />
-                          <Text style={[styles.skinLabel, { color: colors.textPrimary }]}>{sk.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Add Card Submit Button */}
-                  <TouchableOpacity
-                    style={[styles.addCardBtn, { backgroundColor: colors.primary }]}
-                    onPress={handleAddCard}
-                  >
-                    <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.addCardBtnText}>Add This Credit Card</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Bottom Navigation */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity style={styles.skipBtn} onPress={() => setCurrentStep('SALARY')}>
-                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                      onPress={handleContinueFromCards}
-                    >
-                      <Text style={styles.primaryBtnText}>Continue to Income</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* STEP 4: INCOME (SALARIED VS OTHER PAYMENTS) */}
-            {currentStep === 'SALARY' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                  <Ionicons name="cash" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 4 • INCOME & EARNINGS TYPE</Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>How Do You Receive Income?</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Choose your earnings structure to customize monthly projections.
-                </Text>
-
-                {/* 2 Clear Options: Salaried vs Other Payments */}
-                <View style={{ gap: 12, marginBottom: 16 }}>
-                  {/* Option 1: Salaried Employee */}
-                  <TouchableOpacity
-                    style={[
-                      styles.incomeTypeCard,
-                      {
-                        backgroundColor: incomeType === 'SALARIED' ? colors.primaryLight : colors.background,
-                        borderColor: incomeType === 'SALARIED' ? colors.primary : colors.borderSubtle,
-                      },
-                    ]}
-                    onPress={() => setIncomeType('SALARIED')}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
-                        <View style={[styles.incomeIconBox, { backgroundColor: '#DCFCE7' }]}>
-                          <Ionicons name="briefcase-outline" size={18} color="#15803D" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
-                            Salaried Employee (Regular Monthly Inflow)
-                          </Text>
-                          <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>
-                            Fixed monthly salary credited on a specific date.
-                          </Text>
-                        </View>
-                      </View>
-                      <Ionicons
-                        name={incomeType === 'SALARIED' ? 'radio-button-on' : 'radio-button-off'}
-                        size={20}
-                        color={incomeType === 'SALARIED' ? colors.primary : colors.textMuted}
-                      />
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Option 2: Freelance / Other Payments */}
-                  <TouchableOpacity
-                    style={[
-                      styles.incomeTypeCard,
-                      {
-                        backgroundColor: incomeType === 'OTHER' ? colors.primaryLight : colors.background,
-                        borderColor: incomeType === 'OTHER' ? colors.primary : colors.borderSubtle,
-                      },
-                    ]}
-                    onPress={() => setIncomeType('OTHER')}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1, width: '100%' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
-                        <View style={[styles.incomeIconBox, { backgroundColor: '#EDE9FE' }]}>
-                          <Ionicons name="cash-outline" size={18} color="#7C3AED" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.incomeTypeTitle, { color: colors.textPrimary }]}>
-                            Freelance / Variable Income / Other Payments
-                          </Text>
-                          <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>
-                            No regular fixed salary date. Income arrives as deposits.
-                          </Text>
-                        </View>
-                      </View>
-                      <Ionicons
-                        name={incomeType === 'OTHER' ? 'radio-button-on' : 'radio-button-off'}
-                        size={20}
-                        color={incomeType === 'OTHER' ? colors.primary : colors.textMuted}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Salaried Mode: Inputs for monthly salary and payday */}
-                {incomeType === 'SALARIED' ? (
-                  <View style={[styles.formContainerCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                    <Text style={[styles.formCardHeading, { color: colors.textPrimary }]}>Salary Details</Text>
-
-                    <View style={styles.formField}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>EXPECTED MONTHLY SALARY (₹)</Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        value={salaryAmount}
-                        onChangeText={setSalaryAmount}
-                        placeholder="e.g. 148000"
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    <View style={styles.formField}>
-                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                        SALARY RECEIVE DATE OF MONTH (1 - 31)
-                      </Text>
-                      <TextInput
-                        style={[styles.fieldInput, { borderColor: colors.border, color: colors.textPrimary }]}
-                        value={salaryDay}
-                        onChangeText={setSalaryDay}
-                        placeholder="e.g. 1 (1st of month)"
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    {/* Linked Bank Selection (MANDATORY per DEF-003) */}
-                    {banks.length === 0 ? (
-                      <View style={[styles.guidanceCard, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', marginTop: 12 }]}>
-                        <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.guidanceTitle, { color: '#DC2626' }]}>Bank Account Required</Text>
-                          <Text style={[styles.guidanceSub, { color: '#991B1B' }]}>
-                            You haven't added any banks yet. To set up salaried income, please go back to the Banks step and add your salary bank, or switch to Flexible Inflow mode below.
-                          </Text>
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.formField}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                            SALARY CREDITED TO BANK <Text style={{ color: '#DC2626' }}>*</Text>
-                          </Text>
-                          <Text style={[styles.helper, { color: '#DC2626', fontSize: 11 }]}>Mandatory</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-                          {banks.map((b) => {
-                            const isSelected = selectedSalaryBank === b.name;
-                            return (
-                              <TouchableOpacity
-                                key={b.id}
-                                style={[
-                                  styles.quickRatioBtn,
-                                  {
-                                    backgroundColor: isSelected ? colors.primary : colors.surface,
-                                    borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                                  },
-                                ]}
-                                onPress={() => {
-                                  setSelectedSalaryBank(b.name);
-                                  setSalaryBankError(null);
-                                }}
-                              >
-                                <Text style={{ color: isSelected ? '#FFFFFF' : colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
-                                  {b.name}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    )}
-
-                    {salaryBankError && (
-                      <Text style={[styles.errorText, { marginTop: 6 }]}>{salaryBankError}</Text>
-                    )}
-                  </View>
-                ) : (
-                  /* Other Income Mode: Friendly Guidance Banner */
-                  <View style={[styles.guidanceCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                    <Ionicons name="information-circle" size={20} color="#15803D" style={{ marginRight: 10 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.guidanceTitle, { color: '#15803D' }]}>
-                        Flexible Inflow Mode Active
-                      </Text>
-                      <Text style={[styles.guidanceSub, { color: '#166534' }]}>
-                        Whenever you receive client payouts, freelance fees, or dividends, simply tap the bottom '+ Add Entry' button and record a 'Credit / Inflow' to your account.
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Bottom Navigation */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <TouchableOpacity
-                      style={styles.skipBtn}
-                      onPress={() => {
-                        setSalaryBankError(null);
-                        setIncomeType('OTHER');
-                        setCurrentStep(SHOW_DRIVE_STEP ? 'DRIVE' : 'SECURITY');
-                      }}
-                    >
-                      <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip for now</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                      onPress={() => {
-                        if (incomeType === 'SALARIED') {
-                          if (banks.length === 0) {
-                            setSalaryBankError('Please go back to Banks step to add at least one bank account first.');
-                            return;
-                          }
-                          if (!selectedSalaryBank) {
-                            setSalaryBankError('Please select at least one bank account where your salary is credited.');
-                            return;
-                          }
-                        }
-                        setSalaryBankError(null);
-                        setCurrentStep(SHOW_DRIVE_STEP ? 'DRIVE' : 'SECURITY');
-                      }}
-                    >
-                      <Text style={styles.primaryBtnText}>
-                        {SHOW_DRIVE_STEP ? 'Continue to Drive Sync' : 'Continue to Auto-Lock'}
-                      </Text>
-                      <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* STEP 5: GOOGLE DRIVE FOLDER & CADENCE */}
-            {currentStep === 'DRIVE' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-                  <Ionicons name="logo-google" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>STEP 5 • GOOGLE DRIVE STORAGE</Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Google Drive Folder</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Zero 3rd-party database servers! Spreadsheets will be created and saved directly inside your personal Google Drive folder.
-                </Text>
-
-                {/* Folder Name Input */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>TARGET GOOGLE DRIVE FOLDER</Text>
-                  <View style={[styles.inputWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                    <Ionicons name="folder-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
-                    <TextInput
-                      style={[styles.input, { color: colors.textPrimary }]}
-                      value={driveFolderName}
-                      onChangeText={setDriveFolderName}
-                      placeholder="Aegis Spendly"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                  <Text style={[styles.helper, { color: colors.textMuted, marginTop: 4 }]}>
-                    The app creates or uses this folder in your personal Google Drive.
-                  </Text>
-                </View>
-
-                {/* Sync Cadence Cards */}
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>SYNC CADENCE</Text>
-                  <View style={{ gap: 8, marginTop: 4 }}>
-                    {[
-                      {
-                        id: 'MANUAL' as SyncCadence,
-                        title: 'Manual (Web Default)',
-                        desc: 'Sync on-demand via the header button when finished entering transactions.',
-                      },
-                      {
-                        id: 'DAILY' as SyncCadence,
-                        title: 'Daily Scheduled (10:00 PM)',
-                        desc: 'Bundles all changes of the day and pushes once per day at 10 PM.',
-                      },
-                      {
-                        id: 'WEEKLY' as SyncCadence,
-                        title: 'Weekly Scheduled (Sunday)',
-                        desc: 'Pushes weekly batch every Sunday night at 11 PM.',
-                      },
-                    ].map((cad) => {
-                      const isSelected = syncCadence === cad.id;
-                      return (
-                        <TouchableOpacity
-                          key={cad.id}
-                          style={[
-                            styles.incomeTypeCard,
-                            {
-                              backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                              borderColor: isSelected ? colors.primary : colors.borderSubtle,
-                            },
-                          ]}
-                          onPress={() => setSyncCadence(cad.id)}
-                        >
-                          <Ionicons
-                            name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                            size={18}
-                            color={isSelected ? colors.primary : colors.textMuted}
-                            style={{ marginRight: 10 }}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={[
-                                styles.incomeTypeTitle,
-                                { color: isSelected ? colors.primary : colors.textPrimary },
-                              ]}
-                            >
-                              {cad.title}
-                            </Text>
-                            <Text style={[styles.incomeTypeSub, { color: colors.textMuted }]}>{cad.desc}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Bottom Navigation */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                    onPress={() => setCurrentStep('SECURITY')}
-                  >
-                    <Text style={styles.primaryBtnText}>Continue to Auto-Lock</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* STEP 6: AUTO-LOCK SECURITY OPTIONS */}
-            {currentStep === 'SECURITY' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                  <Ionicons name="lock-closed" size={14} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#B91C1C' }]}>
-                    STEP {SHOW_DRIVE_STEP ? 6 : 5} • VAULT AUTO-LOCK & SECURITY
-                  </Text>
-                </View>
-
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Choose Auto-Lock Policy</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Decide when the webpage automatically locks itself with your Master PIN. Choose from 4 curated modes:
-                </Text>
-
-                {/* 4 Lock Policy Cards */}
-                <View style={{ gap: 10, marginBottom: 16 }}>
+              {/* Field 4: Vault Avatar */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>VAULT AVATAR</Text>
+                <View style={styles.avatarRow}>
                   {[
-                    {
-                      id: 'HIGH' as AutoLockPreset,
-                      title: 'Paranoid Security (1 Minute)',
-                      desc: 'Locks after 1 min idle AND immediately when switching browser tabs or minimizing.',
-                      tag: 'Shared Devices',
-                      icon: 'shield-half',
-                    },
-                    {
-                      id: 'BALANCED' as AutoLockPreset,
-                      title: 'Balanced (5 Minutes) — Recommended',
-                      desc: 'Locks after 5 min idle AND immediately when switching browser tabs.',
-                      tag: 'Default',
-                      icon: 'shield-checkmark',
-                    },
-                    {
-                      id: 'RELAXED' as AutoLockPreset,
-                      title: 'Relaxed (15 Minutes)',
-                      desc: 'Locks after 15 min idle. Does NOT lock on quick tab switches.',
-                      tag: 'Personal Laptops',
-                      icon: 'cafe-outline',
-                    },
-                    {
-                      id: 'EXTENDED' as AutoLockPreset,
-                      title: 'Extended Session (30 Minutes)',
-                      desc: 'Locks after 30 min idle. Tab switching remains uninterrupted.',
-                      tag: 'Dedicated Workspace',
-                      icon: 'laptop-outline',
-                    },
-                  ].map((p) => {
-                    const isSelected = selectedPreset === p.id;
+                    { id: 'Moon cat' as AvatarId, label: 'Moon Cat', icon: 'paw' },
+                    { id: 'Forest rabbit' as AvatarId, label: 'Rabbit', icon: 'leaf' },
+                    { id: 'Little ghost' as AvatarId, label: 'Ghost', icon: 'happy' },
+                    { id: 'Star mage' as AvatarId, label: 'Star Mage', icon: 'sparkles' },
+                  ].map((av) => {
+                    const isSelected = avatar === av.id;
                     return (
                       <TouchableOpacity
-                        key={p.id}
+                        key={av.id}
+                        onPress={() => setAvatar(av.id)}
                         style={[
-                          styles.presetCard,
+                          styles.avatarCard,
                           {
-                            backgroundColor: isSelected ? colors.primaryLight : colors.background,
-                            borderColor: isSelected ? colors.primary : colors.borderSubtle,
+                            backgroundColor: isSelected ? 'rgba(75, 226, 119, 0.12)' : '#0D1C2D',
+                            borderColor: isSelected ? colors.primary : '#1C2B3C',
                           },
                         ]}
-                        onPress={() => handleSelectPreset(p.id)}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                            <Ionicons
-                              name={p.icon as any}
-                              size={18}
-                              color={isSelected ? colors.primary : colors.textSecondary}
-                            />
-                            <Text
-                              style={[
-                                styles.presetTitle,
-                                { color: isSelected ? colors.primary : colors.textPrimary, flexShrink: 1 },
-                              ]}
-                            >
-                              {p.title}
-                            </Text>
-                          </View>
-                          <View style={[styles.tagPill, { backgroundColor: isSelected ? colors.primary : '#F1F5F9' }]}>
-                            <Text style={[styles.tagText, { color: isSelected ? '#FFFFFF' : colors.textMuted }]}>
-                              {p.tag}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={[styles.presetDesc, { color: colors.textMuted }]}>{p.desc}</Text>
+                        <Ionicons
+                          name={av.icon as any}
+                          size={18}
+                          color={isSelected ? colors.primary : '#94A3B8'}
+                        />
+                        <Text
+                          style={[
+                            styles.avatarCardText,
+                            { color: isSelected ? colors.primary : '#94A3B8' },
+                          ]}
+                        >
+                          {av.label}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
+              </View>
+            </View>
 
-                {/* Fine-Tuning Switches */}
-                <View style={[styles.customToggleBox, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                  <Text style={[styles.customToggleHeader, { color: colors.textSecondary }]}>FINE-TUNE PREFERENCES</Text>
+            {/* Zero-Knowledge Security Banner Tile */}
+            <View style={[styles.securityBannerCard, { backgroundColor: '#0D1C2D', borderColor: '#1B2F48' }]}>
+              <View style={styles.securityBannerLeft}>
+                <View style={[styles.securityIconBox, { backgroundColor: 'rgba(75, 226, 119, 0.1)', borderColor: 'rgba(75, 226, 119, 0.2)' }]}>
+                  <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.securityBannerTitle, { color: '#D4E4FA' }]}>
+                    Zero-Knowledge Hardware Binding
+                  </Text>
+                  <Text style={[styles.securityBannerSub, { color: '#94A3B8' }]}>
+                    All aliases are signed with local key storage.
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.bitBadge, { backgroundColor: '#122131', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                <Text style={[styles.bitBadgeText, { color: colors.primary }]}>256-Bit</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
-                  <TouchableOpacity
-                    style={styles.toggleRow}
-                    onPress={() => {
-                      setAutoLockOnBlur(!autoLockOnBlur);
-                      setSelectedPreset('CUSTOM');
-                    }}
-                  >
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
-                        Lock immediately on tab switch / window blur
-                      </Text>
-                      <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
-                        Hides sensitive financials whenever you switch tabs or minimize app
-                      </Text>
-                    </View>
-                    {/* Custom Sliding Toggle Knob (DEF-001) */}
-                    <View
-                      style={{
-                        width: 46,
-                        height: 26,
-                        borderRadius: 13,
-                        backgroundColor: autoLockOnBlur ? colors.primary : '#CBD5E1',
-                        padding: 2,
-                        justifyContent: 'center',
-                        alignItems: autoLockOnBlur ? 'flex-end' : 'flex-start',
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 11,
-                          backgroundColor: '#FFFFFF',
-                          elevation: 2,
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: 0.2,
-                          shadowRadius: 1.5,
-                        }}
-                      />
-                    </View>
-                  </TouchableOpacity>
-
-                  <View style={{ marginTop: 10 }}>
-                    <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Inactivity Timeout</Text>
-                    <View style={styles.inactivityRow}>
-                      {[1, 5, 15, 30, 0].map((mins) => {
-                        const isSel = inactivityMinutes === mins;
-                        return (
-                          <TouchableOpacity
-                            key={mins}
-                            style={[
-                              styles.minutePill,
-                              {
-                                backgroundColor: isSel ? colors.primary : colors.surface,
-                                borderColor: isSel ? colors.primary : colors.borderSubtle,
-                              },
-                            ]}
-                            onPress={() => {
-                              setInactivityMinutes(mins);
-                              setSelectedPreset('CUSTOM');
-                            }}
-                          >
-                            <Text style={[styles.minutePillText, { color: isSel ? '#FFFFFF' : colors.textPrimary }]}>
-                              {mins === 0 ? 'Never' : `${mins}m`}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+        {/* ========================================================= */}
+        {/* STEP 2: BANK ACCOUNTS */}
+        {/* ========================================================= */}
+        {currentStep === 'BANKS' && (
+          <View style={styles.stepContainer}>
+            {banks.length === 0 ? (
+              /* Empty State */
+              <View style={[styles.emptyStateCard, { backgroundColor: '#0D1C2D' }]}>
+                <View style={styles.pulseIconContainer}>
+                  <Animated.View
+                    style={[
+                      styles.pulseCircleBack,
+                      {
+                        backgroundColor: 'rgba(75, 226, 119, 0.14)',
+                        transform: [{ scale: pulseScaleAnim }],
+                        opacity: pulseGlowOpacity,
+                      },
+                    ]}
+                  />
+                  <View style={[styles.pulseInnerBox, { backgroundColor: '#122131' }]}>
+                    <Ionicons name="business" size={32} color={colors.primary} />
                   </View>
-
-                  {/* Auto-Delete Vault on Failed PIN Inputs (DEF-007) */}
-                  <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
-                    <TouchableOpacity
-                      style={styles.toggleRow}
-                      onPress={() => setAutoDeleteOnFailedPin(!autoDeleteOnFailedPin)}
-                    >
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={[styles.toggleLabel, { color: autoDeleteOnFailedPin ? '#DC2626' : colors.textPrimary }]}>
-                          Auto-delete vault on failed PIN attempts
-                        </Text>
-                        <Text style={[styles.toggleHelper, { color: colors.textMuted }]}>
-                          Permanently wipes all local accounts and records if consecutive wrong PINs are entered.
-                        </Text>
-                      </View>
-                      {/* Sliding Knob for Auto-Delete (DEF-001) */}
-                      <View
-                        style={{
-                          width: 46,
-                          height: 26,
-                          borderRadius: 13,
-                          backgroundColor: autoDeleteOnFailedPin ? '#DC2626' : '#CBD5E1',
-                          padding: 2,
-                          justifyContent: 'center',
-                          alignItems: autoDeleteOnFailedPin ? 'flex-end' : 'flex-start',
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            backgroundColor: '#FFFFFF',
-                            elevation: 2,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.2,
-                            shadowRadius: 1.5,
-                          }}
-                        />
-                      </View>
-                    </TouchableOpacity>
-
-                    {autoDeleteOnFailedPin && (
-                      <View style={{ marginTop: 12, padding: 12, backgroundColor: '#FEF2F2', borderRadius: 8, borderColor: '#FECACA', borderWidth: 1 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#B91C1C', marginBottom: 4 }}>
-                          Auto-Delete Threshold: {autoDeleteThreshold} Failed Inputs
-                        </Text>
-                        <Text style={{ fontSize: 11, color: '#7F1D1D', marginBottom: 10 }}>
-                          Vault will be permanently deleted after {autoDeleteThreshold} wrong inputs. Select a threshold from 3 to 10:
-                        </Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                          {[3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                            const isSel = autoDeleteThreshold === num;
-                            return (
-                              <TouchableOpacity
-                                key={num}
-                                style={[
-                                  styles.minutePill,
-                                  {
-                                    backgroundColor: isSel ? '#DC2626' : '#FFFFFF',
-                                    borderColor: isSel ? '#DC2626' : '#FECACA',
-                                    minWidth: 34,
-                                  },
-                                ]}
-                                onPress={() => setAutoDeleteThreshold(num)}
-                              >
-                                <Text style={[styles.minutePillText, { color: isSel ? '#FFFFFF' : '#991B1B', fontWeight: isSel ? '700' : '500' }]}>
-                                  {num}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    )}
+                  <View style={[styles.smallPlusBadge, { backgroundColor: colors.primary }]}>
+                    <Ionicons name="add" size={14} color="#003915" />
                   </View>
                 </View>
 
-                {/* Bottom Navigation */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
+                <Text style={[styles.emptyTitle, { color: '#D4E4FA' }]}>
+                  No Bank Accounts Linked
+                </Text>
+                <Text style={[styles.emptySub, { color: '#94A3B8' }]}>
+                  Add your primary salary or savings account to track liquid runway and avoid unexpected shortfalls.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleOpenBankSheet}
+                >
+                  <Ionicons name="add-circle" size={20} color="#003915" style={{ marginRight: 6 }} />
+                  <Text style={styles.primaryActionBtnText}>Add Bank Account</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Populated State */
+              <View style={{ gap: 14 }}>
+                {/* Liquidity Safety Hero Card */}
+                <View style={[styles.heroStatCard, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                  <View style={styles.heroTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.smallPulseDot, { backgroundColor: colors.primary }]} />
+                      <Text style={[styles.heroStatusLabel, { color: colors.primary }]}>
+                        LIQUIDITY SAFETY
+                      </Text>
+                    </View>
+                    <View style={[styles.countBadge, { backgroundColor: '#1C2B3C' }]}>
+                      <Ionicons name="business" size={12} color={colors.primary} />
+                      <Text style={[styles.countBadgeText, { color: '#D4E4FA' }]}>
+                        {banks.length} Linked
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.heroMetricSub, { color: '#94A3B8' }]}>Total Liquid Cash</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <Text style={[styles.heroMetricValue, { color: colors.primary }]}>
+                      {formatRupee(totalLiquidCash)}
+                    </Text>
+                    <Text style={[styles.heroMetricUnit, { color: colors.primary }]}>available</Text>
+                  </View>
+                </View>
+
+                {/* Section Header */}
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionHeading, { color: '#D4E4FA' }]}>Active Accounts</Text>
+                  <View style={[styles.countPill, { backgroundColor: '#122131' }]}>
+                    <Text style={[styles.countPillText, { color: '#94A3B8' }]}>{banks.length}</Text>
+                  </View>
+                </View>
+
+                {/* List of Banks */}
+                {banks.map((b) => (
+                  <View
+                    key={b.id}
+                    style={[styles.itemCardObsidian, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}
+                  >
+                    <View style={styles.itemCardTop}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={[styles.bankIconBox, { backgroundColor: '#1C2B3C' }]}>
+                          <Ionicons name="business" size={20} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.bankTitle, { color: '#D4E4FA' }]}>{b.name}</Text>
+                          <View style={[styles.accountTag, { backgroundColor: '#0D1C2D' }]}>
+                            <Text style={[styles.accountTagText, { color: '#94A3B8' }]}>{b.nickname}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.bankBalanceText, { color: '#D4E4FA' }]}>
+                          {formatRupee(b.balance)}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <TouchableOpacity
+                            onPress={() => handleEditBank(b)}
+                            style={[styles.cardActionIconBtn, { backgroundColor: '#1C2B3C' }]}
+                            accessibilityLabel="Edit bank account"
+                          >
+                            <Ionicons name="pencil-outline" size={13} color="#94A3B8" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveBank(b.id)}
+                            style={[styles.cardActionIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}
+                            accessibilityLabel="Delete bank account"
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* MAB Floor & Buffer Bar */}
+                    <View style={[styles.floorBufferBox, { backgroundColor: 'rgba(13, 28, 45, 0.6)', borderColor: 'rgba(28, 43, 60, 0.6)' }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
+                          <Text style={[styles.floorText, { color: '#D4E4FA' }]}>
+                            Floor: {formatRupee(b.minBalance)} MAB
+                          </Text>
+                        </View>
+                        <Text style={[styles.floorText, { color: '#94A3B8' }]}>
+                          {b.balance >= b.minBalance ? 'Healthy' : 'Below MAB'}
+                        </Text>
+                      </View>
+                      <View style={[styles.progressBarTrack, { backgroundColor: '#1C2B3C' }]}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            {
+                              backgroundColor: colors.primary,
+                              width: `${Math.min(100, Math.round((b.balance / Math.max(1, b.balance + b.minBalance)) * 100))}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Add Another Bank Dashed Card */}
+                <TouchableOpacity
+                  style={[styles.dashedAddBtn, { borderColor: 'rgba(134, 149, 133, 0.3)', backgroundColor: 'rgba(18, 33, 49, 0.3)' }]}
+                  onPress={handleOpenBankSheet}
+                >
+                  <View style={[styles.dashedAddIconBox, { backgroundColor: '#1C2B3C' }]}>
+                    <Ionicons name="add" size={18} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.dashedAddText, { color: '#D4E4FA' }]}>Add Another Bank Account</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 3: CREDIT CARDS */}
+        {/* ========================================================= */}
+        {currentStep === 'CARDS' && (
+          <View style={styles.stepContainer}>
+            {cards.length === 0 ? (
+              /* Empty State */
+              <View style={[styles.emptyStateCard, { backgroundColor: '#0D1C2D' }]}>
+                <View style={styles.pulseIconContainer}>
+                  <Animated.View
+                    style={[
+                      styles.pulseCircleBack,
+                      {
+                        backgroundColor: 'rgba(255, 202, 69, 0.14)',
+                        transform: [{ scale: pulseScaleAnim }],
+                        opacity: pulseGlowOpacity,
+                      },
+                    ]}
+                  />
+                  <View style={[styles.pulseInnerBox, { backgroundColor: '#122131' }]}>
+                    <Ionicons name="card" size={32} color="#FFCA45" />
+                  </View>
+                  <View style={[styles.smallPlusBadge, { backgroundColor: '#FFCA45' }]}>
+                    <Ionicons name="add" size={14} color="#3F2E00" />
+                  </View>
+                </View>
+
+                <Text style={[styles.emptyTitle, { color: '#D4E4FA' }]}>
+                  No Credit Cards Added Yet
+                </Text>
+                <Text style={[styles.emptySub, { color: '#94A3B8' }]}>
+                  Configure statement cut-off days, due dates, and track utilization ceilings to safeguard your credit score.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleOpenCardSheet}
+                >
+                  <Ionicons name="add-circle" size={20} color="#003915" style={{ marginRight: 6 }} />
+                  <Text style={styles.primaryActionBtnText}>Add Credit Card</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Populated State */
+              <View style={{ gap: 14 }}>
+                {/* Credit Utilization Hero Card */}
+                <View style={[styles.heroStatCard, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                  <View style={styles.heroTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.smallPulseDot, { backgroundColor: cardUtilizationPct <= 30 ? colors.primary : '#EF4444' }]} />
+                      <Text style={[styles.heroStatusLabel, { color: cardUtilizationPct <= 30 ? colors.primary : '#EF4444' }]}>
+                        CREDIT UTILIZATION
+                      </Text>
+                    </View>
+                    <View style={[styles.countBadge, { backgroundColor: '#1C2B3C' }]}>
+                      <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
+                      <Text style={[styles.countBadgeText, { color: '#D4E4FA' }]}>
+                        {cardUtilizationPct <= 30 ? `Healthy (${cardUtilizationPct}%)` : `High (${cardUtilizationPct}%)`}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.heroMetricSub, { color: '#94A3B8' }]}>Total Outstanding vs Limit</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <Text style={[styles.heroMetricValue, { color: colors.primary }]}>
+                      {formatRupee(totalCardSpent)}
+                    </Text>
+                    <Text style={[styles.heroMetricLimitText, { color: '#94A3B8' }]}>
+                      / {formatRupee(totalCardLimit)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Section Header */}
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionHeading, { color: '#D4E4FA' }]}>Active Cards ({cards.length})</Text>
+                </View>
+
+                {/* Card List Items */}
+                {cards.map((c) => {
+                  const cardSpentPct = c.limit > 0 ? Math.round((c.balance / c.limit) * 100) : 0;
+                  return (
+                    <View
+                      key={c.id}
+                      style={[styles.itemCardObsidian, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}
+                    >
+                      <View style={styles.itemCardTop}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View
+                            style={[
+                              styles.bankIconBox,
+                              {
+                                backgroundColor:
+                                  c.color === 'PURPLE'
+                                    ? 'rgba(139, 92, 246, 0.2)'
+                                    : c.color === 'CARAMEL'
+                                    ? 'rgba(234, 179, 8, 0.2)'
+                                    : 'rgba(75, 226, 119, 0.2)',
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name="card"
+                              size={20}
+                              color={
+                                c.color === 'PURPLE'
+                                  ? '#A78BFA'
+                                  : c.color === 'CARAMEL'
+                                  ? '#FACC15'
+                                  : colors.primary
+                              }
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.bankTitle, { color: '#D4E4FA' }]}>{c.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              <View style={[styles.accountTag, { backgroundColor: '#0D1C2D' }]}>
+                                <Text style={[styles.accountTagText, { color: colors.primary }]}>{c.network}</Text>
+                              </View>
+                              <Text style={{ fontSize: 11, color: '#94A3B8' }}>{c.provider}</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[styles.bankBalanceText, { color: '#D4E4FA' }]}>
+                            {formatRupee(c.balance)}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                            Limit: {formatRupee(c.limit)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Utilization Bar & Metrics */}
+                      <View style={[styles.floorBufferBox, { backgroundColor: 'rgba(13, 28, 45, 0.6)', borderColor: 'rgba(28, 43, 60, 0.6)' }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={[styles.floorText, { color: colors.primary }]}>
+                            {cardSpentPct}% Spent ({formatRupee(c.balance)})
+                          </Text>
+                          <Text style={[styles.floorText, { color: '#FFCA45' }]}>
+                            Cap: {c.keepTrackRatio}% Max
+                          </Text>
+                        </View>
+                        <View style={[styles.progressBarTrack, { backgroundColor: '#1C2B3C' }]}>
+                          <View
+                            style={[
+                              styles.progressBarFill,
+                              {
+                                backgroundColor: cardSpentPct <= c.keepTrackRatio ? colors.primary : '#EF4444',
+                                width: `${Math.min(100, cardSpentPct)}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Statement and Due Date Chips */}
+                      <View style={styles.cardDatesRow}>
+                        <View style={[styles.dateChip, { backgroundColor: 'rgba(13, 28, 45, 0.6)', borderColor: '#1C2B3C' }]}>
+                          <Ionicons name="calendar-outline" size={14} color="#94A3B8" />
+                          <Text style={[styles.dateChipText, { color: '#D4E4FA' }]}>
+                            Bill Cut: {formatOrdinalDay(c.cutDay)}
+                          </Text>
+                        </View>
+                        <View style={[styles.dateChip, { backgroundColor: 'rgba(13, 28, 45, 0.6)', borderColor: '#1C2B3C' }]}>
+                          <Ionicons name="time-outline" size={14} color="#FFCA45" />
+                          <Text style={[styles.dateChipText, { color: '#FFCA45' }]}>
+                            Due Day: {formatOrdinalDay(c.dueDay)}
+                          </Text>
+                        </View>
+                        <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <TouchableOpacity
+                            onPress={() => handleEditCard(c)}
+                            style={[styles.cardActionIconBtn, { backgroundColor: '#1C2B3C' }]}
+                            accessibilityLabel="Edit credit card"
+                          >
+                            <Ionicons name="pencil-outline" size={13} color="#94A3B8" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveCard(c.id)}
+                            style={[styles.cardActionIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}
+                            accessibilityLabel="Delete credit card"
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Add Another Card Dashed Button */}
+                <TouchableOpacity
+                  style={[styles.dashedAddBtn, { borderColor: 'rgba(134, 149, 133, 0.3)', backgroundColor: 'rgba(18, 33, 49, 0.3)' }]}
+                  onPress={handleOpenCardSheet}
+                >
+                  <View style={[styles.dashedAddIconBox, { backgroundColor: '#1C2B3C' }]}>
+                    <Ionicons name="add" size={18} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.dashedAddText, { color: '#D4E4FA' }]}>Add Another Card</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 4: INCOME STREAMS */}
+        {/* ========================================================= */}
+        {currentStep === 'INCOME' && (
+          <View style={styles.stepContainer}>
+            {incomeStreams.length === 0 ? (
+              /* Empty State */
+              <View style={[styles.emptyStateCard, { backgroundColor: '#0D1C2D' }]}>
+                <View style={styles.pulseIconContainer}>
+                  <Animated.View
+                    style={[
+                      styles.pulseCircleBack,
+                      {
+                        backgroundColor: 'rgba(75, 226, 119, 0.14)',
+                        transform: [{ scale: pulseScaleAnim }],
+                        opacity: pulseGlowOpacity,
+                      },
+                    ]}
+                  />
+                  <View style={[styles.pulseInnerBox, { backgroundColor: '#122131' }]}>
+                    <Ionicons name="cash-outline" size={32} color={colors.primary} />
+                  </View>
+                  <View style={[styles.smallPlusBadge, { backgroundColor: colors.primary }]}>
+                    <Ionicons name="add" size={14} color="#003915" />
+                  </View>
+                </View>
+
+                <Text style={[styles.emptyTitle, { color: '#D4E4FA' }]}>
+                  No Income Sources Added
+                </Text>
+                <Text style={[styles.emptySub, { color: '#94A3B8' }]}>
+                  Add your primary salary or freelance streams to automate cash flow projections and runway calculations.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleOpenIncomeSheet}
+                >
+                  <Ionicons name="add-circle" size={20} color="#003915" style={{ marginRight: 6 }} />
+                  <Text style={styles.primaryActionBtnText}>Add Income Source</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Populated State */
+              <View style={{ gap: 14 }}>
+                {/* Cash Flow Projection Hero Card */}
+                <View style={[styles.heroStatCard, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+                  <View style={styles.heroTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.smallPulseDot, { backgroundColor: colors.primary }]} />
+                      <Text style={[styles.heroStatusLabel, { color: colors.primary }]}>
+                        CASH FLOW PROJECTION
+                      </Text>
+                    </View>
+                    <View style={[styles.countBadge, { backgroundColor: '#1C2B3C' }]}>
+                      <Ionicons name="checkmark-done-circle" size={12} color={colors.primary} />
+                      <Text style={[styles.countBadgeText, { color: '#D4E4FA' }]}>
+                        {incomeStreams.length} Verified Stream{incomeStreams.length === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.heroMetricSub, { color: '#94A3B8' }]}>
+                    Total Estimated Monthly Inflow
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <Text style={[styles.heroMetricValue, { color: colors.primary }]}>
+                      {formatRupee(totalMonthlyInflow)}
+                    </Text>
+                    <Text style={[styles.heroMetricLimitText, { color: '#94A3B8' }]}>/ month</Text>
+                  </View>
+                </View>
+
+                {/* Income Stream Cards List */}
+                {incomeStreams.map((s, idx) => (
+                  <View
+                    key={s.id}
+                    style={[styles.itemCardObsidian, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}
+                  >
+                    <View style={styles.itemCardTop}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={[styles.bankIconBox, { backgroundColor: '#1C2B3C' }]}>
+                          <Ionicons name="business" size={20} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={[styles.bankTitle, { color: '#D4E4FA' }]}>{s.sourceName}</Text>
+                            {idx === 0 && (
+                              <View style={{ backgroundColor: 'rgba(75, 226, 119, 0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>PRIMARY</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{s.category}</Text>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.bankBalanceText, { color: colors.primary }]}>
+                          {formatRupee(s.amount)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>/ month</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <View style={[styles.dateChip, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                          <Ionicons name="calendar-outline" size={12} color={colors.primary} />
+                          <Text style={[styles.dateChipText, { color: '#D4E4FA' }]}>Day {s.dayOfMonth} of month</Text>
+                        </View>
+                        <View style={[styles.dateChip, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+                          <Ionicons name="business-outline" size={12} color="#94A3B8" />
+                          <Text style={[styles.dateChipText, { color: '#94A3B8' }]}>{s.bankAccountId || 'Direct Credit'}</Text>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => handleEditIncomeStream(s)}
+                          style={[styles.cardActionIconBtn, { backgroundColor: '#1C2B3C' }]}
+                          accessibilityLabel="Edit income source"
+                        >
+                          <Ionicons name="pencil-outline" size={13} color="#94A3B8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveIncomeStream(s.id)}
+                          style={[styles.cardActionIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}
+                          accessibilityLabel="Delete income source"
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Add Another Income Source Button */}
+                <TouchableOpacity
+                  style={[styles.dashedAddBtn, { borderColor: 'rgba(75, 226, 119, 0.3)', backgroundColor: '#0D1C2D' }]}
+                  onPress={handleOpenIncomeSheet}
+                >
+                  <View style={[styles.dashedAddIconBox, { backgroundColor: 'rgba(75, 226, 119, 0.15)' }]}>
+                    <Ionicons name="add" size={18} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.dashedAddText, { color: colors.primary }]}>Add Another Income Source</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 5: VAULT SECURITY */}
+        {/* ========================================================= */}
+        {currentStep === 'SECURITY' && (
+          <View style={styles.stepContainer}>
+            {/* AES-256 Enclave Banner */}
+            <View style={[styles.securityBannerCard, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+              <View style={styles.securityBannerLeft}>
+                <View style={[styles.securityIconBox, { backgroundColor: 'rgba(75, 226, 119, 0.1)', borderColor: 'rgba(75, 226, 119, 0.2)' }]}>
+                  <Ionicons name="lock-closed" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.securityBannerTitle, { color: '#D4E4FA' }]}>
+                    AES-256 Enclave
+                  </Text>
+                  <Text style={[styles.securityBannerSub, { color: '#94A3B8' }]}>
+                    Zero-Knowledge • Device Isolated
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.bitBadge, { backgroundColor: '#122131', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                <Text style={[styles.bitBadgeText, { color: colors.primary }]}>Hardware Bound</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.sectionHeading, { color: '#94A3B8', marginTop: 6 }]}>
+              HEURISTIC GUARDRAILS
+            </Text>
+
+            {/* Guardrail 1: Auto Lock on Blur */}
+            <View style={[styles.obsidianCard, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+              <TouchableOpacity
+                style={styles.guardrailRow}
+                onPress={() => setAutoLockOnBlur(!autoLockOnBlur)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                  <View style={[styles.guardrailIconBox, { backgroundColor: 'rgba(75, 226, 119, 0.1)' }]}>
+                    <Ionicons name="layers-outline" size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.guardrailTitle, { color: '#D4E4FA' }]}>Auto Lock</Text>
+                    <Text style={[styles.guardrailSub, { color: '#94A3B8' }]}>
+                      Secure session when app loses focus
+                    </Text>
+                  </View>
+                </View>
+                {/* Switch Knob */}
+                <View
+                  style={[
+                    styles.toggleTrack,
+                    { backgroundColor: autoLockOnBlur ? colors.primary : '#1C2B3C' },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleKnob,
+                      { transform: [{ translateX: autoLockOnBlur ? 18 : 2 }] },
+                    ]}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {/* Inactivity Timeout Options (Conditionally expanded - DEF-030) */}
+              {autoLockOnBlur && (
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#1C2B3C' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8', marginBottom: 8 }}>
+                    Inactivity Timeout
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {[
+                      { label: '1m', mins: 1, preset: 'HIGH' as AutoLockPreset },
+                      { label: '5m', mins: 5, preset: 'BALANCED' as AutoLockPreset },
+                      { label: '15m', mins: 15, preset: 'RELAXED' as AutoLockPreset },
+                      { label: '30m', mins: 30, preset: 'EXTENDED' as AutoLockPreset },
+                    ].map((t) => {
+                      const isSel = inactivityMinutes === t.mins;
+                      return (
+                        <TouchableOpacity
+                          key={t.mins}
+                          onPress={() => {
+                            setInactivityMinutes(t.mins);
+                            setSelectedPreset(t.preset);
+                          }}
+                          style={[
+                            styles.minuteChip,
+                            {
+                              backgroundColor: isSel ? colors.primary : '#122131',
+                              borderColor: isSel ? colors.primary : '#1C2B3C',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.minuteChipText,
+                              { color: isSel ? '#003915' : '#D4E4FA', fontWeight: isSel ? '700' : '500' },
+                            ]}
+                          >
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Guardrail 2: Tamper-Proof Auto-Wipe */}
+            <View style={[styles.obsidianCard, { backgroundColor: '#0D1C2D', borderColor: '#1C2B3C' }]}>
+              <TouchableOpacity
+                style={styles.guardrailRow}
+                onPress={() => setAutoDeleteOnFailedPin(!autoDeleteOnFailedPin)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                  <View style={[styles.guardrailIconBox, { backgroundColor: 'rgba(255, 202, 69, 0.1)' }]}>
+                    <Ionicons name="trash-bin-outline" size={20} color="#FFCA45" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.guardrailTitle, { color: '#D4E4FA' }]}>
+                        Auto-Wipe on Failure
+                      </Text>
+                      <View style={[styles.tagPillSmall, { backgroundColor: 'rgba(75, 226, 119, 0.15)', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                        <Text style={[styles.tagPillSmallText, { color: colors.primary }]}>
+                          {autoDeleteThreshold} Tries
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.guardrailSub, { color: '#94A3B8' }]}>
+                      Wipe vault after {autoDeleteThreshold} failed PIN attempts
+                    </Text>
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.toggleTrack,
+                    { backgroundColor: autoDeleteOnFailedPin ? colors.primary : '#1C2B3C' },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleKnob,
+                      { transform: [{ translateX: autoDeleteOnFailedPin ? 18 : 2 }] },
+                    ]}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {autoDeleteOnFailedPin && (
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#1C2B3C' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8', marginBottom: 8 }}>
+                    Maximum Failed Attempts (5–10)
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {[5, 6, 7, 8, 9, 10].map((num) => {
+                      const isSel = autoDeleteThreshold === num;
+                      return (
+                        <TouchableOpacity
+                          key={num}
+                          onPress={() => setAutoDeleteThreshold(num)}
+                          style={[
+                            styles.minuteChip,
+                            {
+                              backgroundColor: isSel ? colors.primary : '#122131',
+                              borderColor: isSel ? colors.primary : '#1C2B3C',
+                              flex: 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.minuteChipText,
+                              { color: isSel ? '#003915' : '#D4E4FA', fontWeight: isSel ? '700' : '500' },
+                            ]}
+                          >
+                            {num}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={[styles.tipBanner, { backgroundColor: 'rgba(28, 43, 60, 0.4)', borderColor: '#1C2B3C' }]}>
+                    <Ionicons name="information-circle" size={16} color="#FFCA45" style={{ marginRight: 6 }} />
+                    <Text style={[styles.tipBannerText, { color: '#94A3B8' }]}>
+                      <Text style={{ color: '#FFCA45', fontWeight: '600' }}>Recommended: </Text>
+                      5 attempts ensures rapid protection against brute-force attacks.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 6: PIN SETUP & KEYPAD */}
+        {/* ========================================================= */}
+        {currentStep === 'PIN' && (
+          <View style={[styles.stepContainer, { alignItems: 'center' }]}>
+            {/* Top Icon & Subtitle */}
+            <View style={[styles.pinIconCircle, { backgroundColor: '#1C2B3C' }]}>
+              <Ionicons name="shield-checkmark" size={28} color={colors.primary} />
+            </View>
+
+            <Text style={[styles.pinHeroTitle, { color: '#D4E4FA' }]}>
+              {pinSubStep === 'CREATE' ? 'Create 4-Digit PIN' : 'Confirm 4-Digit PIN'}
+            </Text>
+            <Text style={[styles.pinHeroSub, { color: '#94A3B8' }]}>
+              {pinSubStep === 'CREATE'
+                ? 'Establish a local master passcode to encrypt your isolated SQLite biometric vault.'
+                : 'Re-enter your 4-digit master passcode to verify encryption hash.'}
+            </Text>
+
+            {/* 4 PIN Dots */}
+            <View style={[styles.pinDotsRow, { backgroundColor: '#0D1C2D' }]}>
+              {[0, 1, 2, 3].map((idx) => {
+                const isFilled = idx < currentPinDigits.length;
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.pinDot,
+                      {
+                        backgroundColor: isFilled ? colors.primary : '#1C2B3C',
+                        shadowColor: isFilled ? colors.primary : 'transparent',
+                        shadowOpacity: isFilled ? 0.7 : 0,
+                        shadowRadius: 8,
+                      },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Status Feedback */}
+            {pinError ? (
+              <Text style={[styles.pinFeedbackText, { color: '#EF4444' }]}>{pinError}</Text>
+            ) : (
+              <Text style={[styles.pinFeedbackText, { color: colors.primary }]}>
+                {currentPinDigits.length === 4
+                  ? 'Passcode Ready'
+                  : `${currentPinDigits.length} of 4 Digits Staged`}
+              </Text>
+            )}
+
+            {/* PBKDF2 Protocol Chip */}
+            <View style={[styles.protocolChip, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+              <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.protocolTitle, { color: '#D4E4FA' }]}>
+                  PBKDF2-SHA256 • Hardware Enclave
+                </Text>
+                <Text style={[styles.protocolSub, { color: '#64748B' }]}>
+                  Zero-knowledge protocol • Stored 100% offline
+                </Text>
+              </View>
+              <View style={[styles.localTag, { backgroundColor: 'rgba(75, 226, 119, 0.1)' }]}>
+                <Text style={[styles.localTagText, { color: colors.primary }]}>LOCAL</Text>
+              </View>
+            </View>
+
+            {/* Tactile Numeric Keypad */}
+            <View style={styles.keypadGrid}>
+              {[
+                ['1', '2', '3'],
+                ['4', '5', '6'],
+                ['7', '8', '9'],
+                ['bio', '0', 'backspace'],
+              ].map((row, rIdx) => (
+                <View key={rIdx} style={styles.keypadRow}>
+                  {row.map((k) => (
+                    <TouchableOpacity
+                      key={k}
+                      onPress={() => handleKeypadPress(k)}
+                      style={[
+                        styles.keypadBtn,
+                        {
+                          backgroundColor: k === 'bio' || k === 'backspace' ? '#0D1C2D' : '#122131',
+                        },
+                      ]}
+                    >
+                      {k === 'backspace' ? (
+                        <Ionicons name="backspace-outline" size={22} color="#94A3B8" />
+                      ) : k === 'bio' ? (
+                        <Ionicons name="finger-print" size={22} color={colors.primary} />
+                      ) : (
+                        <Text style={[styles.keypadNumText, { color: '#D4E4FA' }]}>{k}</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </View>
+
+            {/* Action Buttons */}
+            {pinSubStep === 'CREATE' ? (
+              <TouchableOpacity
+                disabled={createdPin.length !== 4}
+                onPress={() => setPinSubStep('CONFIRM')}
+                style={[
+                  styles.primaryActionBtn,
+                  {
+                    backgroundColor: createdPin.length === 4 ? colors.primary : '#1C2B3C',
+                    marginTop: 16,
+                    width: '100%',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.primaryActionBtnText,
+                    { color: createdPin.length === 4 ? '#003915' : '#64748B' },
+                  ]}
+                >
+                  Continue to Confirm PIN
+                </Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={16}
+                  color={createdPin.length === 4 ? '#003915' : '#64748B'}
+                  style={{ marginLeft: 6 }}
+                />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                disabled={confirmPin.length !== 4 || isEncryptingPin}
+                onPress={handleConfirmPin}
+                style={[
+                  styles.primaryActionBtn,
+                  {
+                    backgroundColor: confirmPin.length === 4 ? colors.primary : '#1C2B3C',
+                    marginTop: 16,
+                    width: '100%',
+                  },
+                ]}
+              >
+                {isEncryptingPin ? (
+                  <ActivityIndicator size="small" color="#003915" />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="lock-closed"
+                      size={16}
+                      color={confirmPin.length === 4 ? '#003915' : '#64748B'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.primaryActionBtnText,
+                        { color: confirmPin.length === 4 ? '#003915' : '#64748B' },
+                      ]}
+                    >
+                      Encrypt Vault with PIN
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 7: VAULT READY & ANIMATED SVG */}
+        {/* ========================================================= */}
+        {currentStep === 'READY' && (
+          <View style={[styles.stepContainer, { alignItems: 'center' }]}>
+            {/* Animated SVG Component */}
+            <View style={{ marginVertical: 12 }}>
+              <AnimatedVault size={isDesktop ? 280 : 230} />
+            </View>
+
+            {/* Status Pill */}
+            <View style={[styles.vaultReadyBadge, { backgroundColor: '#122131', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+              <View style={[styles.smallPulseDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.vaultReadyBadgeText, { color: colors.primary }]}>
+                Vault Encrypted & Locked
+              </Text>
+              <Ionicons name="lock-closed" size={12} color={colors.primary} />
+            </View>
+
+            <Text style={[styles.vaultReadyTitle, { color: '#D4E4FA' }]}>
+              Your Vault is Ready
+            </Text>
+            <Text style={[styles.vaultReadySub, { color: '#94A3B8' }]}>
+              Local SQLite database sealed with AES-256 and your Master PIN. All financial intelligence remains 100% offline on this device.
+            </Text>
+
+            {/* Stacked Bento Specification Cards */}
+            <View style={{ width: '100%', gap: 10, marginVertical: 20 }}>
+              {/* Spec 1 */}
+              <View style={[styles.bentoSpecCard, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+                <View style={[styles.bentoIconBox, { backgroundColor: '#1C2B3C' }]}>
+                  <Ionicons name="person-circle" size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.bentoTitle, { color: '#D4E4FA' }]}>Identity Sealed</Text>
+                    <View style={[styles.tagPillSmall, { backgroundColor: 'rgba(75, 226, 119, 0.15)', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                      <Text style={[styles.tagPillSmallText, { color: colors.primary }]}>Secure</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.bentoDesc, { color: '#94A3B8' }]}>
+                    Master profile, biometric keys & device seed
+                  </Text>
+                </View>
+              </View>
+
+              {/* Spec 2 */}
+              <View style={[styles.bentoSpecCard, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+                <View style={[styles.bentoIconBox, { backgroundColor: '#1C2B3C' }]}>
+                  <Ionicons name="business" size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.bentoTitle, { color: '#D4E4FA' }]}>Accounts Configured</Text>
+                    <View style={[styles.tagPillSmall, { backgroundColor: 'rgba(75, 226, 119, 0.15)', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                      <Text style={[styles.tagPillSmallText, { color: colors.primary }]}>Ready</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.bentoDesc, { color: '#94A3B8' }]}>
+                    Liquid vaults, credit limits & recurring cashflow
+                  </Text>
+                </View>
+              </View>
+
+              {/* Spec 3 */}
+              <View style={[styles.bentoSpecCard, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}>
+                <View style={[styles.bentoIconBox, { backgroundColor: '#1C2B3C' }]}>
+                  <Ionicons name="shield-checkmark" size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.bentoTitle, { color: '#D4E4FA' }]}>Zero-Knowledge Core</Text>
+                    <View style={[styles.tagPillSmall, { backgroundColor: 'rgba(75, 226, 119, 0.15)', borderColor: 'rgba(75, 226, 119, 0.3)' }]}>
+                      <Text style={[styles.tagPillSmallText, { color: colors.primary }]}>AES-256</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.bentoDesc, { color: '#94A3B8' }]}>
+                    PBKDF2-SHA256 derived key tied to hardware enclave
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Launch Dashboard CTA */}
+            <TouchableOpacity
+              onPress={handleFinishOnboarding}
+              disabled={isFinishing}
+              style={[
+                styles.primaryActionBtn,
+                { backgroundColor: colors.primary, width: '100%', height: 52, borderRadius: 14 },
+              ]}
+            >
+              {isFinishing ? (
+                <ActivityIndicator size="small" color="#003915" />
+              ) : (
+                <>
+                  <Text style={[styles.primaryActionBtnText, { fontSize: 15 }]}>
+                    Enter Your Vault Dashboard
+                  </Text>
+                  <Ionicons name="arrow-forward" size={18} color="#003915" style={{ marginLeft: 6 }} />
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
+              <View style={[styles.smallGreenDot, { backgroundColor: colors.primary }]} />
+              <Text style={{ fontSize: 11, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                SQLite Local Database Initialized • Offline Mode Active
+              </Text>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ========================================================= */}
+      {/* FIXED BOTTOM ACTION BAR (STEPS 1 TO 5) */}
+      {/* ========================================================= */}
+      {currentStep !== 'PIN' && currentStep !== 'READY' && (
+        <View style={styles.fixedFooter}>
+          <View style={[styles.footerContainer, { maxWidth: isDesktop ? 540 : '100%' }]}>
+            <TouchableOpacity
+              style={[styles.skipFooterBtn, { backgroundColor: '#122131', borderColor: '#1C2B3C' }]}
+              onPress={() => {
+                if (currentStep === 'IDENTITY') setCurrentStep('BANKS');
+                else if (currentStep === 'BANKS') setCurrentStep('CARDS');
+                else if (currentStep === 'CARDS') setCurrentStep('INCOME');
+                else if (currentStep === 'INCOME') setCurrentStep('SECURITY');
+                else if (currentStep === 'SECURITY') setCurrentStep('PIN');
+              }}
+            >
+              <Text style={[styles.skipFooterText, { color: '#D4E4FA' }]}>Skip</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.continueFooterBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                if (currentStep === 'IDENTITY') {
+                  if (validateUsernameInput(username)) setCurrentStep('BANKS');
+                } else if (currentStep === 'BANKS') {
+                  setCurrentStep('CARDS');
+                } else if (currentStep === 'CARDS') {
+                  setCurrentStep('INCOME');
+                } else if (currentStep === 'INCOME') {
+                  setCurrentStep('SECURITY');
+                } else if (currentStep === 'SECURITY') {
+                  setCurrentStep('PIN');
+                }
+              }}
+            >
+              <Text style={styles.continueFooterText}>
+                {currentStep === 'IDENTITY'
+                  ? 'Continue to Bank Setup'
+                  : currentStep === 'BANKS'
+                  ? 'Continue to Credit Cards'
+                  : currentStep === 'CARDS'
+                  ? 'Continue to Income'
+                  : currentStep === 'INCOME'
+                  ? 'Continue to Security'
+                  : 'Setup PIN'}
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color="#003915" style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* ========================================================= */}
+      {/* BOTTOM SHEET MODAL: ADD BANK ACCOUNT */}
+      {/* ========================================================= */}
+      <Modal
+        visible={isAddBankSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseBankSheet}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={handleCloseBankSheet}
+          />
+          <View style={[styles.sheetContent, { backgroundColor: '#0D1C2D' }]}>
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: '#D4E4FA' }]}>
+                  {editingBankId ? 'Edit Bank Account' : 'Add Bank Account'}
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: '#94A3B8' }]}>
+                  Store bank records securely in your on-device encrypted vault.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleCloseBankSheet}
+                style={[styles.sheetCloseBtn, { backgroundColor: '#1C2B3C' }]}
+              >
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Account Type Toggle */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>ACCOUNT TYPE</Text>
+                <View style={styles.toggleTwoRow}>
+                  <TouchableOpacity
+                    onPress={() => setDraftBankType('SAVINGS')}
+                    style={[
+                      styles.toggleTwoBtn,
+                      {
+                        backgroundColor: draftBankType === 'SAVINGS' ? '#273647' : '#010F1F',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="wallet"
+                      size={16}
+                      color={draftBankType === 'SAVINGS' ? colors.primary : '#94A3B8'}
+                    />
+                    <Text
+                      style={[
+                        styles.toggleTwoText,
+                        { color: draftBankType === 'SAVINGS' ? '#D4E4FA' : '#94A3B8' },
+                      ]}
+                    >
+                      Savings Account
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary }]}
-                    onPress={() => setCurrentStep('CONFIRMATION')}
+                    onPress={() => setDraftBankType('CURRENT')}
+                    style={[
+                      styles.toggleTwoBtn,
+                      {
+                        backgroundColor: draftBankType === 'CURRENT' ? '#273647' : '#010F1F',
+                      },
+                    ]}
                   >
-                    <Text style={styles.primaryBtnText}>Review & Finish</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                    <Ionicons
+                      name="business"
+                      size={16}
+                      color={draftBankType === 'CURRENT' ? colors.primary : '#94A3B8'}
+                    />
+                    <Text
+                      style={[
+                        styles.toggleTwoText,
+                        { color: draftBankType === 'CURRENT' ? '#D4E4FA' : '#94A3B8' },
+                      ]}
+                    >
+                      Current / Salary
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
 
-            {/* STEP 7: REVIEW & COMPLETE */}
-            {currentStep === 'CONFIRMATION' && (
-              <View>
-                <View style={[styles.badgePill, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                  <Ionicons name="checkmark-done-circle" size={14} color="#15803D" style={{ marginRight: 6 }} />
-                  <Text style={[styles.badgePillText, { color: '#15803D' }]}>FINAL STEP • READY TO LAUNCH</Text>
+              {/* Bank Name */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>BANK NAME</Text>
+                <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                  <Ionicons name="business-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.textInput, { color: '#D4E4FA' }]}
+                    value={draftBankName}
+                    onChangeText={setDraftBankName}
+                    placeholder="HDFC Bank, ICICI, SBI"
+                    placeholderTextColor="#64748B"
+                  />
+                </View>
+              </View>
+
+              {/* Account Nickname */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>ACCOUNT NICKNAME</Text>
+                <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                  <TextInput
+                    style={[styles.textInput, { color: '#D4E4FA' }]}
+                    value={draftBankNickname}
+                    onChangeText={setDraftBankNickname}
+                    placeholder="Primary Savings, Emergency Fund"
+                    placeholderTextColor="#64748B"
+                  />
+                </View>
+              </View>
+
+              {/* Opening Balance & MAB */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>OPENING BALANCE (₹)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <Text style={{ color: colors.primary, fontWeight: '700', marginRight: 4 }}>₹</Text>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftBankBalance}
+                      onChangeText={setDraftBankBalance}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
                 </View>
 
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Your Aegis Spendly Vault</Text>
-                <Text style={[styles.sub, { color: colors.textMuted }]}>
-                  Everything is configured and encrypted. Review your personalized setup below:
-                </Text>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>MIN. BALANCE / MAB (₹)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <Text style={{ color: '#94A3B8', fontWeight: '700', marginRight: 4 }}>₹</Text>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftBankMinBalance}
+                      onChangeText={setDraftBankMinBalance}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
 
-                {/* Summary Cards */}
-                <View style={[styles.summaryCard, { backgroundColor: colors.background, borderColor: colors.borderSubtle }]}>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Profile Identity</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                      {displayName} (@{username})
-                    </Text>
+            <View style={{ gap: 8, marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={handleSaveBankDraft}
+                style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+              >
+                <Ionicons name="lock-closed" size={16} color="#003915" style={{ marginRight: 6 }} />
+                <Text style={styles.primaryActionBtnText}>
+                  {editingBankId ? 'Save Changes' : 'Save Account to Local Vault'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCloseBankSheet}
+                style={styles.cancelSheetBtn}
+              >
+                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '500' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* BOTTOM SHEET MODAL: ADD CREDIT CARD */}
+      {/* ========================================================= */}
+      <Modal
+        visible={isAddCardSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseCardSheet}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={handleCloseCardSheet}
+          />
+          <View style={[styles.sheetContent, { backgroundColor: '#0D1C2D' }]}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: '#D4E4FA' }]}>
+                  {editingCardId ? 'Edit Credit Card' : 'Add Credit Card'}
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: '#94A3B8' }]}>
+                  Setup zero-telemetry offline card ledger.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleCloseCardSheet}
+                style={[styles.sheetCloseBtn, { backgroundColor: '#1C2B3C' }]}
+              >
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Card Provider & Nickname */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>PROVIDER / ISSUER</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardProvider}
+                      onChangeText={setDraftCardProvider}
+                      placeholder="HDFC Bank, ICICI"
+                      placeholderTextColor="#64748B"
+                    />
                   </View>
-                  {SHOW_DRIVE_STEP && (
-                    <>
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Google Account</Text>
-                        <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{email}</Text>
-                      </View>
-                      <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Drive Folder</Text>
-                        <Text style={[styles.summaryVal, { color: colors.primary, fontWeight: '700' }]}>
-                          📁 {driveFolderName}
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>CARD TITLE</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardNickname}
+                      onChangeText={setDraftCardNickname}
+                      placeholder="Millennia, Regalia"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Card Network Chips (Horizontal Scroll - DEF-026) */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>CARD NETWORK</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                >
+                  {(['Visa', 'Mastercard', 'RuPay', 'Amex'] as const).map((net) => {
+                    const isSel = draftCardNetwork === net;
+                    return (
+                      <TouchableOpacity
+                        key={net}
+                        onPress={() => setDraftCardNetwork(net)}
+                        style={[
+                          styles.minuteChip,
+                          {
+                            backgroundColor: isSel ? colors.primary : '#010F1F',
+                            borderColor: isSel ? colors.primary : '#1C2B3C',
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                          },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.minuteChipText,
+                            { color: isSel ? '#003915' : '#D4E4FA', fontWeight: isSel ? '700' : '500' },
+                          ]}
+                        >
+                          {net}
                         </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Limit & Balance */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>CREDIT LIMIT (₹)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardLimit}
+                      onChangeText={setDraftCardLimit}
+                      keyboardType="numeric"
+                      placeholder="100000"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>SPENT / OUTSTANDING (₹)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardBalance}
+                      onChangeText={setDraftCardBalance}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Target Utilization Cap Presets */}
+              <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>TARGET UTILIZATION CAP</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
+                    {draftCardCapRatio}%
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[30, 40, 50, 60, 100].map((pct) => {
+                    const isSel = draftCardCapRatio === pct;
+                    return (
+                      <TouchableOpacity
+                        key={pct}
+                        onPress={() => setDraftCardCapRatio(pct)}
+                        style={[
+                          styles.minuteChip,
+                          {
+                            backgroundColor: isSel ? '#FFCA45' : '#010F1F',
+                            borderColor: isSel ? '#FFCA45' : '#1C2B3C',
+                            flex: 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.minuteChipText,
+                            { color: isSel ? '#3F2E00' : '#D4E4FA', fontWeight: isSel ? '700' : '500' },
+                          ]}
+                        >
+                          {pct}%
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Statement Cut Day & Due Day */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>BILL CUT DAY (1–31)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: cardCutDayError ? '#EF4444' : '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardCutDay}
+                      onChangeText={setDraftCardCutDay}
+                      keyboardType="numeric"
+                      placeholder=""
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                  {cardCutDayError && <Text style={styles.errorText}>{cardCutDayError}</Text>}
+                </View>
+
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>DUE DAY (1–31)</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: cardDueDayError ? '#EF4444' : '#1C2B3C' }]}>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftCardDueDay}
+                      onChangeText={setDraftCardDueDay}
+                      keyboardType="numeric"
+                      placeholder=""
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                  {cardDueDayError && <Text style={styles.errorText}>{cardDueDayError}</Text>}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={{ gap: 8, marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={handleSaveCardDraft}
+                style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+              >
+                <Ionicons name="lock-closed" size={16} color="#003915" style={{ marginRight: 6 }} />
+                <Text style={styles.primaryActionBtnText}>
+                  {editingCardId ? 'Save Changes' : 'Save Card to Local Vault'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCloseCardSheet}
+                style={styles.cancelSheetBtn}
+              >
+                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '500' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* BOTTOM SHEET MODAL: ADD INCOME STREAM (1:1 STITCH DESIGN) */}
+      {/* ========================================================= */}
+      <Modal
+        visible={isAddIncomeSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseIncomeSheet}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={handleCloseIncomeSheet}
+          />
+          <View style={[styles.sheetContent, { backgroundColor: '#0D1C2D' }]}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                {incomeSheetTab === 'FREELANCE' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <View style={[styles.smallPulseDot, { backgroundColor: colors.primary }]} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary, letterSpacing: 1, textTransform: 'uppercase' }}>
+                      Vault Inflow Layer
+                    </Text>
+                  </View>
+                ) : null}
+                <Text style={[styles.sheetTitle, { color: '#D4E4FA' }]}>
+                  {editingIncomeId
+                    ? 'Edit Income Source'
+                    : incomeSheetTab === 'SALARY'
+                    ? 'Add Salary Income'
+                    : 'Add Other Income Source'}
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: '#94A3B8' }]}>
+                  {incomeSheetTab === 'SALARY'
+                    ? 'Automate payroll tracking and liquid reserves'
+                    : 'Configure secondary or non-salaried earnings'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleCloseIncomeSheet}
+                style={[styles.sheetCloseBtn, { backgroundColor: '#1C2B3C' }]}
+              >
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Category Toggle: Salary vs Freelance / Other */}
+            <View style={styles.incomeToggleContainer}>
+              <TouchableOpacity
+                onPress={() => setIncomeSheetTab('SALARY')}
+                style={[
+                  styles.incomeToggleTab,
+                  incomeSheetTab === 'SALARY'
+                    ? { backgroundColor: colors.primary }
+                    : { backgroundColor: 'transparent' },
+                ]}
+              >
+                <Ionicons
+                  name={incomeSheetTab === 'SALARY' ? 'checkmark-circle' : 'cash-outline'}
+                  size={16}
+                  color={incomeSheetTab === 'SALARY' ? '#003915' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.incomeToggleText,
+                    { color: incomeSheetTab === 'SALARY' ? '#003915' : '#94A3B8' },
+                  ]}
+                >
+                  Salary
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setIncomeSheetTab('FREELANCE')}
+                style={[
+                  styles.incomeToggleTab,
+                  incomeSheetTab === 'FREELANCE'
+                    ? { backgroundColor: '#1C2B3C' }
+                    : { backgroundColor: 'transparent' },
+                ]}
+              >
+                <Ionicons
+                  name="briefcase-outline"
+                  size={16}
+                  color={incomeSheetTab === 'FREELANCE' ? colors.primary : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.incomeToggleText,
+                    { color: incomeSheetTab === 'FREELANCE' ? '#D4E4FA' : '#94A3B8' },
+                  ]}
+                >
+                  Freelance / Other
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {incomeSheetTab === 'SALARY' ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                {/* Field 1: Organisation Name */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>COMPANY OR ORGANISATION</Text>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C' }]}>
+                    <Ionicons name="business-outline" size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA' }]}
+                      value={draftIncomeSource}
+                      onChangeText={setDraftIncomeSource}
+                      placeholder="Acme Technologies Inc"
+                      placeholderTextColor="#64748B"
+                    />
+                  </View>
+                </View>
+
+                {/* Field 2: Net Monthly Salary */}
+                <View style={styles.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.fieldLabel, { color: '#94A3B8', marginBottom: 0 }]}>NET MONTHLY SALARY</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Post-tax liquid</Text>
+                  </View>
+                  <View style={[styles.inputBox, { backgroundColor: '#010F1F', borderColor: '#1C2B3C', height: 52 }]}>
+                    <Text style={{ fontSize: 22, fontWeight: '700', color: colors.primary, marginRight: 6 }}>₹</Text>
+                    <TextInput
+                      style={[styles.textInput, { color: '#D4E4FA', fontSize: 18, fontWeight: '700' }]}
+                      value={draftIncomeAmount}
+                      onChangeText={setDraftIncomeAmount}
+                      keyboardType="numeric"
+                      placeholder="85,000"
+                      placeholderTextColor="#64748B"
+                    />
+                    <View style={{ backgroundColor: '#1C2B3C', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8' }}>INR</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Field 3: Payday Selector */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>DAY OF SALARY / PAYDAY</Text>
+                  <View style={styles.paydayGrid}>
+                    {[
+                      { day: 1, label: '1st', icon: 'calendar-outline' as const },
+                      { day: 5, label: '5th', icon: 'calendar-outline' as const },
+                      { day: 25, label: '25th', icon: 'calendar-outline' as const },
+                      { day: 31, label: 'Last Day', icon: 'repeat-outline' as const },
+                    ].map((p) => {
+                      const isSelected = draftIncomeDay === p.day;
+                      return (
+                        <TouchableOpacity
+                          key={p.day}
+                          onPress={() => setDraftIncomeDay(p.day)}
+                          style={[
+                            styles.paydayPill,
+                            isSelected
+                              ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                              : { backgroundColor: '#122131', borderColor: '#1C2B3C' },
+                          ]}
+                        >
+                          <Ionicons
+                            name={p.icon}
+                            size={14}
+                            color={isSelected ? '#003915' : '#94A3B8'}
+                          />
+                          <Text
+                            style={[
+                              styles.paydayPillText,
+                              { color: isSelected ? '#003915' : '#94A3B8' },
+                            ]}
+                          >
+                            {p.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Field 4: Linked accounts */}
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: '#94A3B8' }]}>LINKED ACCOUNTS</Text>
+                  {banks.length > 0 ? (
+                    <View style={{ gap: 8 }}>
+                      {banks.map((b) => {
+                        const isSelected = (draftIncomeBank || banks[0]?.name) === b.name;
+                        return (
+                          <TouchableOpacity
+                            key={b.id}
+                            onPress={() => setDraftIncomeBank(b.name)}
+                            style={[
+                              styles.incomeBankCard,
+                              isSelected
+                                ? { backgroundColor: '#122131', borderColor: colors.primary }
+                                : { backgroundColor: '#091624', borderColor: '#1C2B3C' },
+                            ]}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                              <View style={[styles.bankIconBox, { backgroundColor: '#1C2B3C' }]}>
+                                <Ionicons
+                                  name="business-outline"
+                                  size={18}
+                                  color={isSelected ? colors.primary : '#94A3B8'}
+                                />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#D4E4FA' }}>
+                                    {b.nickname || b.name}
+                                  </Text>
+                                  <View style={{ backgroundColor: 'rgba(75, 226, 119, 0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '700', color: colors.primary }}>Connected</Text>
+                                  </View>
+                                </View>
+                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                                  {b.type === 'CURRENT' ? 'Current Account' : 'Primary Salary Account'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View
+                              style={[
+                                styles.incomeBankRadio,
+                                isSelected
+                                  ? { backgroundColor: colors.primary }
+                                  : { backgroundColor: '#1C2B3C' },
+                              ]}
+                            >
+                              {isSelected && <Ionicons name="checkmark" size={13} color="#003915" />}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                      <TouchableOpacity
+                        style={styles.addLinkedBankBtn}
+                        onPress={handleOpenBankFromIncome}
+                      >
+                        <Ionicons name="add" size={16} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600', marginLeft: 6 }}>
+                          Link Another Bank Account
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      <View
+                        style={[
+                          styles.incomeBankCard,
+                          { backgroundColor: '#122131', borderColor: colors.primary },
+                        ]}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View style={[styles.bankIconBox, { backgroundColor: '#1C2B3C' }]}>
+                            <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#D4E4FA' }}>
+                                Primary Cash Vault (Offline)
+                              </Text>
+                              <View style={{ backgroundColor: 'rgba(75, 226, 119, 0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: colors.primary }}>Default</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                              Local offline reserve cash flow
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.incomeBankRadio, { backgroundColor: colors.primary }]}>
+                          <Ionicons name="checkmark" size={13} color="#003915" />
+                        </View>
                       </View>
-                    </>
-                  )}
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Bank Accounts</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                      {banks.length === 0 ? 'None added (can add later)' : `${banks.length} account${banks.length === 1 ? '' : 's'} added`}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Credit Cards</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                      {cards.length === 0 ? 'None added (can add later)' : `${cards.length} card${cards.length === 1 ? '' : 's'} configured`}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Income Type</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                      {incomeType === 'SALARIED' ? `Salaried (${formatRupee(parseFloat(salaryAmount) || 0)} on ${salaryDay}th)` : 'Flexible Inflow / Freelance'}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Auto-Lock Policy</Text>
-                    <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                      {inactivityMinutes === 0 ? 'No idle lock' : `${inactivityMinutes}m idle`}
-                      {autoLockOnBlur ? ' + Tab blur lock' : ''}
-                    </Text>
-                  </View>
-                  {autoDeleteOnFailedPin && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: '#DC2626' }]}>Auto-Delete Vault</Text>
-                      <Text style={[styles.summaryVal, { color: '#DC2626', fontWeight: '700' }]}>
-                        Wipe after {autoDeleteThreshold} failed PIN attempts
-                      </Text>
+
+                      <TouchableOpacity
+                        style={styles.addLinkedBankBtn}
+                        onPress={handleOpenBankFromIncome}
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600', marginLeft: 6 }}>
+                          Add Bank Account to Link
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
 
-                {/* Bottom Navigation with Back and Launch */}
-                <View style={styles.bottomNavRow}>
-                  <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
-                    <Ionicons name="arrow-back" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
-                    <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>Back</Text>
-                  </TouchableOpacity>
-
+                {/* Actions */}
+                <View style={{ gap: 8, marginTop: 8, marginBottom: 12 }}>
                   <TouchableOpacity
-                    style={[styles.primaryBtnSmall, { backgroundColor: colors.primary, flex: 1, marginLeft: 14 }]}
-                    onPress={handleFinishOnboarding}
-                    disabled={isFinishing}
+                    onPress={handleSaveIncomeDraft}
+                    style={[
+                      styles.primaryActionBtn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: draftIncomeSource.trim() && draftIncomeAmount.trim() ? 1 : 0.6,
+                      },
+                    ]}
+                    disabled={!draftIncomeSource.trim() || !draftIncomeAmount.trim()}
                   >
-                    {isFinishing ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="rocket-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                        <Text style={styles.primaryBtnText}>Launch Spendly Vault</Text>
-                      </>
-                    )}
+                    <Text style={styles.primaryActionBtnText}>
+                      {editingIncomeId ? 'Save Changes' : 'Save Income to Vault'}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={16} color="#003915" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleCloseIncomeSheet}
+                    style={styles.cancelSheetBtn}
+                  >
+                    <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '500' }}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            ) : (
+              /* FREELANCE / OTHER TAB */
+              <View style={{ paddingVertical: 6 }}>
+                <View style={styles.freelanceNoticeCard}>
+                  <View style={styles.freelanceIconBox}>
+                    <Ionicons name="information-circle-outline" size={26} color={colors.primary} />
+                  </View>
+                  <Text style={styles.freelanceNoticeTitle}>
+                    You can enter the details after setting up the app
+                  </Text>
+                  <Text style={styles.freelanceNoticeDesc}>
+                    Custom freelance & business streams can be tracked directly from the Ledger once initial vault configuration is complete.
+                  </Text>
+                </View>
+
+                <View style={{ gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity
+                    onPress={handleCloseIncomeSheet}
+                    style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
+                  >
+                    <Ionicons name="arrow-back" size={16} color="#003915" style={{ marginRight: 6 }} />
+                    <Text style={styles.primaryActionBtnText}>Close and Return to Overview</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setIncomeSheetTab('SALARY')}
+                    style={styles.cancelSheetBtn}
+                  >
+                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Switch to Salary</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
           </View>
         </View>
-      </ScrollView>
+      </Modal>
     </View>
   );
 };
@@ -1707,461 +2691,908 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  scrollRoot: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    minHeight: '100%',
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: 'rgba(5, 20, 36, 0.92)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(28, 43, 60, 0.6)',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 44 : 12,
+    paddingBottom: 8,
   },
-  container: {
-    width: '100%',
-  },
-  stepperRow: {
+  headerTopRow: {
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-    maxWidth: '100%',
+    justifyContent: 'space-between',
   },
-  stepIndicatorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-  },
-  stepDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
+  headerBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepDotText: {
-    fontSize: 9,
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
-  stepConnector: {
-    width: 14,
-    height: 2,
-    marginHorizontal: 2,
-  },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  badgePill: {
+  stepPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 9999,
     borderWidth: 1,
-    marginBottom: 10,
+    gap: 6,
   },
-  badgePillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-    marginBottom: 6,
+  stepPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  sub: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 18,
+  stepperBarRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  stepperSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  scrollContent: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    minHeight: '100%',
+    width: '100%',
+    alignSelf: 'center',
+  },
+  stepContainer: {
+    width: '100%',
+    gap: 16,
+  },
+  obsidianCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
   },
   formGroup: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  label: {
+  fieldHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  fieldLabel: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
-    marginBottom: 6,
+    textTransform: 'uppercase',
   },
-  helper: {
+  fieldHint: {
     fontSize: 11,
   },
-  inputWrap: {
+  inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
     height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
   },
-  atSign: {
+  textInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
+  },
+  clearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#1C2B3C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  availableBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9999,
+    borderWidth: 1,
+    gap: 4,
+  },
+  smallGreenDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  availableText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  atPrefix: {
     fontSize: 15,
     fontWeight: '700',
     marginRight: 6,
   },
-  input: {
-    flex: 1,
-    fontSize: 14,
-  },
   errorText: {
-    color: '#DC2626',
     fontSize: 11,
+    color: '#EF4444',
     marginTop: 4,
-    fontWeight: '600',
   },
-  avatarGrid: {
+  tagChipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    marginTop: 8,
   },
-  avatarOption: {
+  ruleChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
+    gap: 4,
   },
-  avatarLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+  ruleChipText: {
+    fontSize: 11,
+    color: '#94A3B8',
   },
-  emptyNoticeBox: {
-    padding: 20,
-    borderRadius: 12,
+  readonlyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9999,
     borderWidth: 1,
-    borderStyle: 'dashed',
+    gap: 4,
+  },
+  readonlyText: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  readOnlyEmailText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  avatarCard: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
   },
-  emptyNoticeTitle: {
+  avatarCardText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  securityBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  securityBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  securityIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityBannerTitle: {
     fontSize: 13,
     fontWeight: '700',
   },
-  emptyNoticeSub: {
+  securityBannerSub: {
+    fontSize: 12,
+  },
+  bitBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginLeft: 8,
+  },
+  bitBadgeText: {
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  emptyStateCard: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
     textAlign: 'center',
   },
-  itemCard: {
-    flexDirection: 'row',
+  pulseIconContainer: {
+    width: 80,
+    height: 80,
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  itemIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+  pulseCircleBack: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  pulseInnerBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemName: {
-    fontSize: 13,
+  smallPlusBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
   },
-  itemMeta: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  removeBtn: {
-    padding: 6,
-  },
-  formContainerCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  formCardHeading: {
+  emptySub: {
     fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 20,
+    maxWidth: 280,
   },
-  formField: {
-    marginBottom: 12,
+  primaryActionBtn: {
+    flexDirection: 'row',
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    shadowColor: '#22c55e',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
-  fieldLabel: {
-    fontSize: 10,
+  primaryActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#003915',
+  },
+  heroStatCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  smallPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  heroStatusLabel: {
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
-  fieldInput: {
-    height: 42,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+  countBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+    gap: 4,
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  heroMetricSub: {
+    fontSize: 12,
+  },
+  heroMetricValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  heroMetricLimitText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  heroMetricUnit: {
     fontSize: 13,
+    fontWeight: '500',
   },
-  addCardBtn: {
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  countPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 9999,
+  },
+  countPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  itemCardObsidian: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+  },
+  itemCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bankIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bankTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  accountTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  accountTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  bankBalanceText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  floorBufferBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  floorText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  dashedAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  dashedAddIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashedAddText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cardDatesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  dateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  dateChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  incomeTypeToggleBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     height: 40,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  addCardBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sliderBox: {
-    padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 14,
+    gap: 6,
   },
-  sliderHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  ratioBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  ratioBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  sliderSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  quickRatioRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginVertical: 8,
-  },
-  quickRatioBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickRatioBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  thresholdLegend: {
-    gap: 4,
-    marginTop: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 11,
-  },
-  skinOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    flex: 1,
-  },
-  skinDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  skinLabel: {
+  incomeTypeToggleText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  incomeTypeCard: {
+  guardrailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    justifyContent: 'space-between',
   },
-  incomeIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+  guardrailIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  incomeTypeTitle: {
-    fontSize: 13,
+  guardrailTitle: {
+    fontSize: 14,
     fontWeight: '700',
   },
-  incomeTypeSub: {
-    fontSize: 11,
-    marginTop: 2,
+  guardrailSub: {
+    fontSize: 12,
+    marginTop: 1,
   },
-  guidanceCard: {
-    flexDirection: 'row',
-    padding: 16,
+  toggleTrack: {
+    width: 44,
+    height: 24,
     borderRadius: 12,
+    justifyContent: 'center',
+  },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  minuteChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 32,
+    borderRadius: 8,
     borderWidth: 1,
+    paddingHorizontal: 12,
+  },
+  minuteChipText: {
+    fontSize: 12,
+  },
+  tagPillSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  tagPillSmallText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  tipBannerText: {
+    fontSize: 11,
+    lineHeight: 15,
+    flex: 1,
+  },
+  pinIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  pinHeroTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  pinHeroSub: {
+    fontSize: 13,
+    textAlign: 'center',
+    maxWidth: 290,
+    lineHeight: 18,
     marginBottom: 16,
   },
-  guidanceTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  guidanceSub: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  presetCard: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  presetTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  presetDesc: {
-    fontSize: 11,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  tagPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  customToggleBox: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  customToggleHeader: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+  pinDotsRow: {
+    flexDirection: 'row',
+    gap: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
     marginBottom: 8,
   },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
+  pinDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
-  toggleLabel: {
+  pinFeedbackText: {
     fontSize: 12,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    height: 18,
   },
-  toggleHelper: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-  inactivityRow: {
+  protocolChip: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  minutePill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    width: '100%',
+    gap: 8,
+    marginVertical: 14,
   },
-  minutePillText: {
+  protocolTitle: {
     fontSize: 11,
     fontWeight: '700',
   },
-  summaryCard: {
+  protocolSub: {
+    fontSize: 10,
+  },
+  localTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  localTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  keypadGrid: {
+    width: '100%',
+    gap: 8,
+  },
+  keypadRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  keypadBtn: {
+    flex: 1,
+    height: 48,
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keypadNumText: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  vaultReadyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
     borderWidth: 1,
-    padding: 16,
+    gap: 6,
+    marginBottom: 10,
+  },
+  vaultReadyBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  vaultReadyTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  vaultReadySub: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    maxWidth: 320,
+  },
+  bentoSpecCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
     gap: 12,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-  },
-  summaryVal: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bottomNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-  backBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  skipBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  skipBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 46,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  primaryBtnSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-    height: 42,
+  bentoIconBox: {
+    width: 40,
+    height: 40,
     borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  primaryBtnText: {
-    color: '#FFFFFF',
+  bentoTitle: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  bentoDesc: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  fixedFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(5, 20, 36, 0.94)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(28, 43, 60, 0.8)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    zIndex: 50,
+  },
+  footerContainer: {
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  skipFooterBtn: {
+    height: 46,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipFooterText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  continueFooterBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#22c55e',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  continueFooterText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#003915',
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(1, 15, 31, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#273647',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sheetSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleTwoRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  toggleTwoBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+    borderRadius: 10,
+    gap: 6,
+  },
+  toggleTwoText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cancelSheetBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+  },
+  incomeToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#010F1F',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+    marginBottom: 16,
+  },
+  incomeToggleTab: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  incomeToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  paydayGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  paydayPill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1,
+  },
+  paydayPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  incomeBankCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  incomeBankRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addLinkedBankBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#1C2B3C',
+    marginTop: 4,
+  },
+  freelanceNoticeCard: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: '#010F1F',
+    borderWidth: 1,
+    borderColor: 'rgba(75, 226, 119, 0.25)',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  freelanceIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(75, 226, 119, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(75, 226, 119, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  freelanceNoticeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#D4E4FA',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  freelanceNoticeDesc: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  cardActionIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
 });

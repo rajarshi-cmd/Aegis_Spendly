@@ -8,6 +8,10 @@ import * as ScreenCapture from 'expo-screen-capture';
  */
 export async function enableScreenCaptureProtection(): Promise<void> {
   try {
+    // In development mode, allow screen captures for emulator inspection
+    if (__DEV__) {
+      return;
+    }
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
       await ScreenCapture.preventScreenCaptureAsync();
     }
@@ -37,8 +41,12 @@ export function usePrivacyShield() {
   const [isShieldActive, setIsShieldActive] = useState<boolean>(false);
 
   useEffect(() => {
-    // Activate hardware protection on mount
-    enableScreenCaptureProtection();
+    // Activate hardware protection on mount (release in DEV mode)
+    if (__DEV__) {
+      disableScreenCaptureProtection();
+    } else {
+      enableScreenCaptureProtection();
+    }
 
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       // Inactive (iOS app switcher) or Background (Android/iOS backgrounded)

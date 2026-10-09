@@ -1,3 +1,5 @@
+import { kvStorage } from '../storage/kvStorage';
+
 export type AvatarId = 'Moon cat' | 'Forest rabbit' | 'Little ghost' | 'Star mage' | 'Custom Google';
 
 export interface UserProfile {
@@ -28,8 +30,6 @@ export const DEFAULT_PROFILE: UserProfile = {
   driveFolderId: 'aegis-spendly-folder',
   driveFolderName: 'Aegis Spendly',
 };
-
-import { kvStorage } from '../storage/kvStorage';
 
 const PROFILE_STORAGE_KEY = 'aegis_user_profile_data';
 

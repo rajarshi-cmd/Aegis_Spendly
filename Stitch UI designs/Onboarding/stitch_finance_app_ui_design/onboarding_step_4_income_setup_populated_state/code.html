@@ -1,0 +1,246 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_stack" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+  @layer base {
+    html, body {
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+      background-color: #051424;
+    }
+    body {
+      overscroll-behavior: none;
+    }
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .pt-safe {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+    main > :first-child {
+      margin-top: 0 !important;
+    }
+    main > :last-child {
+      margin-bottom: 0 !important;
+    }
+  }
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  body {
+    min-height: max(884px, 100dvh);
+  }
+</style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-secondary": "#3f2e00",
+          "on-primary-container": "#004b1e",
+          "surface-container-highest": "#273647",
+          "surface-dim": "#051424",
+          "on-secondary-fixed-variant": "#5a4300",
+          "on-tertiary": "#68000a",
+          "tertiary": "#ffb4ae",
+          "surface-tint": "#4ae176",
+          "outline": "#869585",
+          "on-tertiary-fixed": "#410004",
+          "primary": "#4be277",
+          "on-error": "#690005",
+          "on-primary-fixed-variant": "#005321",
+          "outline-variant": "#3d4a3d",
+          "on-error-container": "#ffdad6",
+          "primary-fixed-dim": "#4ae176",
+          "inverse-primary": "#006e2f",
+          "primary-container": "#22c55e",
+          "secondary-fixed": "#ffdf9a",
+          "on-primary": "#003915",
+          "secondary": "#ffca45",
+          "error": "#ffb4ab",
+          "tertiary-fixed": "#ffdad7",
+          "error-container": "#93000a",
+          "on-tertiary-fixed-variant": "#930013",
+          "on-secondary-container": "#5b4400",
+          "surface-container": "#122131",
+          "on-surface-variant": "#bccbb9",
+          "primary-fixed": "#6bff8f",
+          "surface-bright": "#2c3a4c",
+          "surface-container-lowest": "#010f1f",
+          "on-surface": "#d4e4fa",
+          "inverse-on-surface": "#233143",
+          "on-secondary-fixed": "#251a00",
+          "secondary-fixed-dim": "#f7be1d",
+          "background": "#051424",
+          "on-primary-fixed": "#002109",
+          "tertiary-fixed-dim": "#ffb3ad",
+          "secondary-container": "#e4ae00",
+          "on-background": "#d4e4fa",
+          "surface-container-low": "#0d1c2d",
+          "surface-variant": "#273647",
+          "surface-container-high": "#1c2b3c",
+          "surface": "#051424",
+          "tertiary-container": "#ff8a83",
+          "on-tertiary-container": "#860011",
+          "inverse-surface": "#d4e4fa"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "space-xl": "1.5rem",
+          "space-md": "0.75rem",
+          "space-sm": "0.5rem",
+          "gutter": "1rem",
+          "space-xs": "0.25rem",
+          "margin-tablet": "1.5rem",
+          "gutter-sm": "0.75rem",
+          "margin": "1rem",
+          "space-lg": "1rem"
+        },
+        "fontFamily": {
+          "headline-md": ["Inter"],
+          "numeric-metric": ["Inter"],
+          "display-hero-mobile": ["Inter"],
+          "label-md": ["Inter"],
+          "body-md": ["Inter"],
+          "headline-lg": ["Inter"],
+          "label-sm": ["Inter"],
+          "display-hero": ["Inter"],
+          "body-sm": ["Inter"],
+          "body-lg": ["Inter"],
+          "headline-sm": ["Inter"],
+          "label-lg": ["Inter"]
+        },
+        "fontSize": {
+          "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+          "numeric-metric": ["24px", { "lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+          "display-hero-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.025em", "fontWeight": "700" }],
+          "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+          "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+          "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+          "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }],
+          "display-hero": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+          "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+          "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+          "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+          "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+        }
+      }
+    }
+  };
+</script>
+</head>
+<body class="bg-surface text-on-surface flex flex-col min-h-screen">
+<header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.25)]">
+<div class="h-20 px-margin flex flex-col justify-center gap-2.5">
+<div class="flex items-center justify-between">
+<button aria-label="Go back" class="w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors" onclick="window.history.back()" type="button">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<div class="flex-1 flex items-center justify-center px-2 text-center"><h1 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate">Income Streams</h1></div>
+<div class="flex items-center">
+<span class="font-label-md text-label-md text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full font-semibold">4/6</span>
+</div>
+</div>
+<div class="grid grid-cols-6 gap-1.5 w-full px-1">
+<div class="h-1 rounded-full bg-primary shadow-[0_0_8px_rgba(75,226,119,0.4)]"></div>
+<div class="h-1 rounded-full bg-primary shadow-[0_0_8px_rgba(75,226,119,0.4)]"></div>
+<div class="h-1 rounded-full bg-primary shadow-[0_0_8px_rgba(75,226,119,0.4)]"></div>
+<div class="h-1 rounded-full bg-primary shadow-[0_0_8px_rgba(75,226,119,0.4)]"></div>
+<div class="h-1 rounded-full bg-surface-container-highest/60"></div>
+<div class="h-1 rounded-full bg-surface-container-highest/60"></div>
+</div>
+</div>
+</header>
+<main class="flex-1 flex flex-col relative w-full pt-20 pb-safe bg-surface pb-28"><div class="flex flex-col w-full px-margin pb-6 gap-4">
+<!-- Overview Projection Card (Level 1 Elevation) -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container p-4 shadow-xl">
+<div class="absolute -top-16 -right-16 w-36 h-36 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex items-center justify-between mb-3">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-primary font-semibold">CASH FLOW PROJECTION</span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px] text-primary">verified</span>
+<span class="">2 verified streams</span>
+</div>
+</div>
+<div class="mb-3">
+<span class="block font-label-md text-label-md text-on-surface-variant mb-0.5">Total Estimated Monthly Inflow</span>
+<div class="flex items-baseline gap-1.5">
+<span class="font-display-hero-mobile text-display-hero-mobile text-primary font-bold tracking-tight">₹1,25,000</span>
+<span class="font-label-lg text-label-lg text-on-surface-variant">/ month</span>
+</div>
+</div>
+<!-- Mini Visual Bar & Chips -->
+<div class="space-y-2">
+
+
+</div>
+</div>
+<!-- Configured Income Stream 1: Corporate Paycheck -->
+<div class="group relative rounded-xl bg-surface-container p-4 shadow-md transition-all duration-200 hover:bg-surface-container-high active:scale-[0.99]">
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0 shadow-inner">
+<span class="material-symbols-outlined text-[20px] text-primary" style="font-variation-settings: 'FILL' 1;">domain</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate">Acme Corp Technologies</h3>
+<span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-label-sm text-label-sm font-semibold uppercase">Primary</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant block">Salaried Paycheck</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="font-headline-sm text-headline-sm text-primary font-bold block">₹85,000</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">/ month</span>
+</div>
+</div>
+<!-- Metadata Badges & Quick Action Row -->
+<div class="flex items-center justify-between pt-2">
+<div class="flex items-center gap-1.5 flex-wrap">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-lowest text-on-surface-variant font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px] text-primary">calendar_today</span>
+          Day 1 of month
+        </span>
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-lowest text-on-surface-variant font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[13px] text-on-surface-variant">account_balance</span>
+          HDFC Bank ••9842
+        </span>
+</div>
+<button aria-label="Edit salary source" class="w-8 h-8 rounded-lg flex items-center justify-center bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+</div>
+<!-- Configured Income Stream 2: Freelance / Retainers -->
+
+<!-- Add Another Source Interactive Button -->
+<button class="w-full py-3.5 px-4 rounded-xl bg-surface-container-low hover:bg-surface-container active:bg-surface-container-high flex items-center justify-center gap-2 text-primary font-label-lg text-label-lg transition-all group" type="button">
+<div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[18px] text-primary">add</span>
+</div>
+<span class="">Add Another Income Source</span>
+</button>
+<!-- Micro-Assurance Helper Pill -->
+
+<!-- Bottom Translucent Action Tray -->
+
+</div></main>
+
+
+<div class="fixed bottom-0 inset-x-0 z-50 bg-surface/90 backdrop-blur-xl px-margin py-4 pb-safe flex items-center gap-3 border-t border-surface-container-highest/60"><button class="w-24 h-12 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-label-lg text-label-lg transition-colors flex items-center justify-center" type="button">Skip</button><button class="flex-1 h-12 rounded-xl bg-primary hover:bg-primary-fixed active:scale-[0.98] text-on-primary font-label-lg text-label-lg font-bold shadow-[0_4px_16px_rgba(75,226,119,0.3)] flex items-center justify-center gap-2 transition-all" type="button"><span class="">Continue to Security</span><span class="material-symbols-outlined text-[20px]">arrow_forward</span></button></div></body></html>

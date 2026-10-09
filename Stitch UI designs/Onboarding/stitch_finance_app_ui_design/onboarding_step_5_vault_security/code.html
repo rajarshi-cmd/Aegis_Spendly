@@ -1,0 +1,277 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_stack" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#051424",
+            "background": "#051424",
+            "surface-dim": "#051424",
+            "surface-container-lowest": "#010f1f",
+            "surface-container-low": "#0d1c2d",
+            "surface-container": "#122131",
+            "surface-container-high": "#1c2b3c",
+            "surface-container-highest": "#273647",
+            "surface-variant": "#273647",
+            "surface-bright": "#2c3a4c",
+            "on-surface": "#d4e4fa",
+            "on-surface-variant": "#bccbb9",
+            "primary": "#4be277",
+            "primary-container": "#22c55e",
+            "on-primary": "#003915",
+            "secondary": "#ffca45",
+            "tertiary": "#ffb4ae",
+            "outline": "#869585",
+            "outline-variant": "#3d4a3d",
+            "error": "#ffb4ab"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    @layer base {
+      html, body {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #051424;
+        color: #d4e4fa;
+        font-family: 'Inter', sans-serif;
+      }
+      body {
+        overscroll-behavior-y: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface flex flex-col min-h-screen">
+<!-- Top Navigation Header -->
+<header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.25)] border-b border-surface-container-highest/20">
+<div class="h-16 px-4 flex items-center justify-between">
+<button aria-label="Go back" class="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors" onclick="window.history.back()" type="button">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">shield_lock</span>
+<h1 class="text-[18px] font-semibold text-on-surface tracking-tight">Vault Security</h1>
+</div>
+<!-- Step Pill Badge -->
+<span class="text-[12px] font-semibold text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
+        5 of 6
+      </span>
+</div>
+<!-- Stepper (Steps 1-4 Complete, Step 5 Active, Step 6 Pending) -->
+<div class="px-4 pb-3 flex items-center justify-between gap-1.5">
+<!-- Step 1 -->
+<div class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[14px] font-bold">check</span>
+</div>
+<div class="flex-1 h-0.5 bg-primary/40 rounded-full"></div>
+<!-- Step 2 -->
+<div class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[14px] font-bold">check</span>
+</div>
+<div class="flex-1 h-0.5 bg-primary/40 rounded-full"></div>
+<!-- Step 3 -->
+<div class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[14px] font-bold">check</span>
+</div>
+<div class="flex-1 h-0.5 bg-primary/40 rounded-full"></div>
+<!-- Step 4 -->
+<div class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[14px] font-bold">check</span>
+</div>
+<div class="flex-1 h-0.5 bg-primary rounded-full"></div>
+<!-- Step 5: Active -->
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 font-bold text-[12px] shadow-[0_0_10px_rgba(75,226,119,0.45)] ring-2 ring-primary/30">
+        5
+      </div>
+<div class="flex-1 h-0.5 bg-surface-container-highest rounded-full"></div>
+<!-- Step 6: Upcoming -->
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0 text-[11px] font-medium border border-surface-container-highest/60">
+        6
+      </div>
+</div>
+</header>
+<!-- Main Scrollable Content Area -->
+<main class="flex-1 flex flex-col relative w-full px-4 pt-28 pb-32 bg-surface">
+<div class="flex flex-col w-full space-y-4">
+<!-- Top Summary Hero Card (SCREEN_17 Inspired) -->
+<div class="relative w-full rounded-xl bg-surface-container-low p-3.5 shadow-sm border border-surface-container-highest/30 flex items-center justify-between"><div class="flex items-center space-x-3 min-w-0"><div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-primary text-[22px]" style="font-variation-settings: 'FILL' 1;">lock</span></div><div class="flex flex-col min-w-0"><div class="flex items-center gap-2"><span class="text-[14px] font-semibold text-on-surface truncate">AES-256 Enclave</span><span class="flex h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></span></div><span class="text-[12px] text-on-surface-variant truncate">Zero-Knowledge • Device Isolated</span></div></div><div class="flex items-center shrink-0"><span class="text-[11px] font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1"><span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">enhanced_encryption</span>Hardware Bound</span></div></div>
+<!-- Section Title: Security Presets -->
+<!-- Guardrail Toggle Cards (Matching the bottom card style of SCREEN_17) -->
+<div class="flex flex-col space-y-2 pt-1">
+<span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider px-1">Heuristic Guardrails</span>
+<!-- Guardrail Card 1: Auto-lock on blur -->
+<div class="relative bg-surface-container-low rounded-2xl p-4 overflow-hidden flex items-center justify-between shadow-sm border border-surface-container-highest/30 cursor-pointer select-none transition-colors" id="row-blur">
+<div class="flex items-center space-x-3 z-10 flex-1 pr-3">
+<div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[22px]">layers</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="text-[14px] text-on-surface font-semibold truncate">Auto Lock</span>
+<span class="flex h-1.5 w-1.5 rounded-full bg-primary" id="status-blur"></span>
+</div>
+<span class="text-[12px] text-on-surface-variant line-clamp-1 mt-0.5">Secure session when app loses focus</span>
+</div>
+</div>
+<button aria-checked="true" class="z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-primary transition-all duration-300 ease-in-out focus:outline-none" id="toggle-blur" role="switch" type="button">
+<span class="pointer-events-none inline-block h-5 w-5 transform translate-x-5 rounded-full bg-surface shadow-md ring-0 transition-all duration-300 ease-in-out my-0.5 ml-0.5" id="knob-blur"></span>
+</button>
+</div>
+<!-- Guardrail Card 2: Tamper-Proof Auto-Wipe -->
+<div class="relative bg-surface-container-low rounded-2xl p-4 overflow-hidden flex flex-col shadow-sm border border-surface-container-highest/30 transition-colors gap-3.5" id="row-wipe">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center space-x-3 z-10 flex-1 pr-3">
+      <div class="w-10 h-10 rounded-xl bg-surface-variant flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-secondary text-[22px]">delete_forever</span>
+      </div>
+      <div class="flex flex-col min-w-0">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[14px] text-on-surface font-semibold truncate">Auto-Wipe on Failure</span>
+          <span class="px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30 text-[10px] font-semibold" id="wipe-attempts-badge">5 Tries</span>
+        </div>
+        <span class="text-[12px] text-on-surface-variant line-clamp-1 mt-0.5" id="wipe-desc">Wipe vault after 5 failed PIN attempts</span>
+      </div>
+    </div>
+    <button aria-checked="true" class="z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-primary transition-all duration-300 ease-in-out focus:outline-none" id="toggle-wipe" role="switch" type="button">
+      <span class="pointer-events-none inline-block h-5 w-5 transform translate-x-5 rounded-full bg-surface shadow-md ring-0 transition-all duration-300 ease-in-out my-0.5 ml-0.5" id="knob-wipe"></span>
+    </button>
+  </div>
+
+  <!-- Expanded Attempt Threshold Selector Panel -->
+  <div class="pt-3 border-t border-surface-container-highest/30 flex flex-col gap-3" id="wipe-config-panel">
+    <div class="flex items-center justify-between">
+      <div class="flex flex-col">
+        <span class="text-[12px] font-semibold text-on-surface">Maximum Failed Attempts</span>
+        <span class="text-[11px] text-on-surface-variant">Select threshold before permanent wipe (5–10)</span>
+      </div>
+      <div class="flex items-center gap-1 bg-surface-container-highest/40 border border-surface-container-highest/60 rounded-xl px-2 py-1">
+        <button type="button" id="btn-dec-attempt" class="w-6 h-6 rounded-lg bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center justify-center text-[13px] font-bold transition-colors">
+          <span class="material-symbols-outlined text-[15px]">remove</span>
+        </button>
+        <span class="text-[14px] font-bold text-primary px-1.5 min-w-[20px] text-center" id="val-attempt-display">5</span>
+        <button type="button" id="btn-inc-attempt" class="w-6 h-6 rounded-lg bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center justify-center text-[13px] font-bold transition-colors">
+          <span class="material-symbols-outlined text-[15px]">add</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Segmented Attempt Chips (5 to 10) -->
+    <div class="grid grid-cols-6 gap-1.5 bg-surface-container-lowest/60 p-1 rounded-xl border border-surface-container-highest/20" id="attempts-segmented-group">
+      <button type="button" data-attempts="5" class="attempt-chip py-1.5 rounded-lg text-[12px] font-bold transition-all text-center bg-primary text-[#002109] shadow-[0_0_10px_rgba(75,226,119,0.35)]">5</button>
+      <button type="button" data-attempts="6" class="attempt-chip py-1.5 rounded-lg text-[12px] font-medium transition-all text-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">6</button>
+      <button type="button" data-attempts="7" class="attempt-chip py-1.5 rounded-lg text-[12px] font-medium transition-all text-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">7</button>
+      <button type="button" data-attempts="8" class="attempt-chip py-1.5 rounded-lg text-[12px] font-medium transition-all text-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">8</button>
+      <button type="button" data-attempts="9" class="attempt-chip py-1.5 rounded-lg text-[12px] font-medium transition-all text-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">9</button>
+      <button type="button" data-attempts="10" class="attempt-chip py-1.5 rounded-lg text-[12px] font-medium transition-all text-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">10</button>
+    </div>
+
+    <!-- Security Warning Note -->
+    <div class="flex items-start gap-2 bg-surface-variant/30 border border-surface-container-highest/30 rounded-xl p-2.5">
+      <span class="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">shield_with_heart</span>
+      <p class="text-[11px] text-on-surface-variant leading-tight">
+        <span class="text-secondary font-semibold">Recommended:</span> 5 attempts ensures rapid protection against brute-force attacks. Higher values increase unlock leeway.
+      </p>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+</main>
+<!-- Sticky Bottom Actions Bar (Solid Emerald Green Button) -->
+<footer class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl border-t border-surface-container-highest/20 shadow-[0_-4px_16px_rgba(0,0,0,0.35)]">
+<div class="h-20 px-4 flex items-center justify-between gap-3">
+<button class="h-12 px-5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-semibold text-[14px] transition-colors flex items-center justify-center min-w-[80px]" type="button">
+        Skip
+      </button>
+<button class="flex-1 h-12 rounded-xl bg-[#22c55e] hover:bg-[#16a34a] text-[#002109] font-bold text-[15px] flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_0_16px_rgba(34,197,94,0.35)]" type="button">
+<span class="">Setup PIN</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</footer>
+<!-- Interactivity Logic -->
+<script>
+    (function() {
+      // Toggle Blur (Auto Lock)
+      const rowBlur = document.getElementById('row-blur');
+      const toggleBlur = document.getElementById('toggle-blur');
+      const knobBlur = document.getElementById('knob-blur');
+      const statusBlur = document.getElementById('status-blur');
+      let isBlurOn = true;
+
+      function updateBlur() {
+        toggleBlur.setAttribute('aria-checked', isBlurOn);
+        if (isBlurOn) {
+          toggleBlur.className = 'z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-primary transition-all duration-300 ease-in-out focus:outline-none';
+          knobBlur.className = 'pointer-events-none inline-block h-5 w-5 transform translate-x-5 rounded-full bg-surface shadow-md ring-0 transition-all duration-300 ease-in-out my-0.5 ml-0.5';
+          if (statusBlur) statusBlur.classList.remove('opacity-0');
+        } else {
+          toggleBlur.className = 'z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-surface-container-highest transition-all duration-300 ease-in-out focus:outline-none';
+          knobBlur.className = 'pointer-events-none inline-block h-5 w-5 transform translate-x-0.5 rounded-full bg-on-surface-variant shadow ring-0 transition-all duration-300 ease-in-out my-0.5';
+          if (statusBlur) statusBlur.classList.add('opacity-0');
+        }
+      }
+
+      if (rowBlur) {
+        rowBlur.addEventListener('click', (e) => {
+          isBlurOn = !isBlurOn;
+          updateBlur();
+        });
+      }
+
+      // Toggle Wipe
+      const rowWipe = document.getElementById('row-wipe');
+      const toggleWipe = document.getElementById('toggle-wipe');
+      const knobWipe = document.getElementById('knob-wipe');
+      let isWipeOn = false;
+
+      function updateWipe() {
+        toggleWipe.setAttribute('aria-checked', isWipeOn);
+        if (isWipeOn) {
+          toggleWipe.className = 'z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-primary transition-all duration-300 ease-in-out focus:outline-none';
+          knobWipe.className = 'pointer-events-none inline-block h-5 w-5 transform translate-x-5 rounded-full bg-surface shadow-md ring-0 transition-all duration-300 ease-in-out my-0.5 ml-0.5';
+        } else {
+          toggleWipe.className = 'z-10 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full bg-surface-container-highest transition-all duration-300 ease-in-out focus:outline-none';
+          knobWipe.className = 'pointer-events-none inline-block h-5 w-5 transform translate-x-0.5 rounded-full bg-on-surface-variant shadow ring-0 transition-all duration-300 ease-in-out my-0.5';
+        }
+      }
+
+      if (rowWipe) {
+        rowWipe.addEventListener('click', (e) => {
+          isWipeOn = !isWipeOn;
+          updateWipe();
+        });
+      }
+
+      // Initialize states
+      updateBlur();
+      updateWipe();
+    })();
+  </script>
+
+
+</body></html>

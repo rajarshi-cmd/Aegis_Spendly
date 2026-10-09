@@ -1,10 +1,11 @@
 {
   "name": "app",
-  "version": "1.0.5",
+  "version": "1.2.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
     "@expo/vector-icons": "^15.0.2",
+    "buffer": "^6.0.3",
     "expo": "~57.0.27",
     "expo-print": "~57.0.2",
     "expo-screen-capture": "~57.0.4",
@@ -15,6 +16,7 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

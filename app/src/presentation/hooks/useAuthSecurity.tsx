@@ -16,7 +16,7 @@ import {
   loadAuthSession,
   clearAuthSession,
 } from '../../core/security/cryptoVault';
-import { clearUserProfile } from '../../core/types/profile';
+import { clearUserProfile, loadUserProfile } from '../../core/types/profile';
 import { kvStorage } from '../../core/storage/kvStorage';
 import { getDatabase } from '../../core/database/db';
 
@@ -80,22 +80,20 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const saved = loadAuthSession();
     const savedConfig = loadSecurityConfig();
+    const savedProfile = loadUserProfile();
     if (savedConfig) {
       setConfig(savedConfig);
     }
     if (saved) {
       setUser(saved);
-      if (saved.pinHash && saved.pinSalt) {
-        if (saved.isOnboarded === false) {
-          setAuthStatus('ONBOARDING');
-        } else {
-          setAuthStatus('LOCKED'); // Require PIN on app open
-        }
+      if (saved.pinHash && saved.pinSalt && (saved.isOnboarded || savedProfile?.isOnboarded)) {
+        setAuthStatus('LOCKED'); // Require PIN on app open for existing configured vault
       } else {
-        setAuthStatus('PIN_SETUP');
+        setAuthStatus('ONBOARDING');
       }
     } else {
-      setAuthStatus('UNAUTHENTICATED');
+      // First-time launch: go straight to Onboarding flow!
+      setAuthStatus('ONBOARDING');
     }
   }, []);
 
@@ -277,18 +275,25 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setLockoutUntil(null);
     setLockoutRemainingSeconds(0);
 
-    // 5. Explicitly transition to PIN_SETUP for the new vault
-    setAuthStatus('PIN_SETUP');
+    // 5. Explicitly transition to ONBOARDING for the new vault
+    setAuthStatus('ONBOARDING');
   }, []);
 
   const setupPin = useCallback(
     async (pin: string): Promise<boolean> => {
-      if (!pin || pin.length !== 4 || !user) return false;
+      if (!pin || pin.length !== 4) return false;
+      const current = user || loadAuthSession() || {
+        id: 'usr_onboard_' + Date.now().toString(36),
+        email: '',
+        name: 'Spendly User',
+        username: 'user',
+        isOnboarded: false,
+      };
       const salt = generateSalt();
       const hash = await hashPin(pin, salt);
 
       const updatedUser: AuthUser = {
-        ...user,
+        ...current,
         pinSalt: salt,
         pinHash: hash,
       };
@@ -407,14 +412,20 @@ export const AuthSecurityProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const completeOnboarding = useCallback(
     (details?: { username?: string; name?: string; email?: string; photoUrl?: string }) => {
-      if (!user) return;
+      const current = user || loadAuthSession() || {
+        id: 'usr_onboard_' + Date.now().toString(36),
+        email: details?.email || '',
+        name: details?.name || 'Spendly User',
+        username: details?.username || 'user',
+        isOnboarded: false,
+      };
       const updatedUser: AuthUser = {
-        ...user,
+        ...current,
         isOnboarded: true,
-        username: details?.username || user.username || 'user',
-        name: details?.name || user.name || '',
-        email: details?.email || user.email || '',
-        photoUrl: details?.photoUrl || user.photoUrl,
+        username: details?.username || current.username || 'user',
+        name: details?.name || current.name || '',
+        email: details?.email || current.email || '',
+        photoUrl: details?.photoUrl || current.photoUrl,
       };
       setUser(updatedUser);
       saveAuthSession(updatedUser);
