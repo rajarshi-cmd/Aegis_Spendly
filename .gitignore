@@ -15,6 +15,7 @@ app/expo-env.d.ts
 
 # Large archives and temporary binaries
 *.zip
+!Stitch UI designs/**/*.zip
 *.tar.gz
 *.7z
 *.exe
