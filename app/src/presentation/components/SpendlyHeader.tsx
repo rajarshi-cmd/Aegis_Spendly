@@ -341,27 +341,13 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
         </>
       ) : (
         <View style={{ width: '100%', gap: 10 }}>
-          {/* Mobile Top Row: Left Title Column & Rightmost Profile Button (DEF-006) */}
+          {/* Mobile Top Row: Clean Title Column & Rightmost Profile Chip */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
-              {onOpenSideMenu && (
-                <TouchableOpacity
-                  style={[
-                    styles.iconButton,
-                    { backgroundColor: colors.surface, borderColor: colors.borderSubtle, marginRight: 8 },
-                  ]}
-                  onPress={onOpenSideMenu}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="menu-outline" size={20} color={colors.textPrimary} />
-                </TouchableOpacity>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.greetingLabel, { color: colors.textMuted }]} numberOfLines={1}>{title}</Text>
-                <Text style={[styles.mainSubtitle, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={1}>
-                  {subtitle}
-                </Text>
-              </View>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={[styles.greetingLabel, { color: colors.textMuted }]} numberOfLines={1}>{title}</Text>
+              <Text style={[styles.mainSubtitle, { color: colors.textPrimary, fontSize: 16 }]} numberOfLines={1}>
+                {subtitle}
+              </Text>
             </View>
 
             {/* Profile Button - Far Top-Right Corner */}
@@ -390,7 +376,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
                       ? 'sparkles'
                       : profile.avatar === 'Custom Google'
                       ? 'logo-google'
-                      : 'person'
+                      : 'paw'
                   }
                   size={14}
                   color={colors.primary}
@@ -403,7 +389,7 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Mobile Bottom Row: Month Selector + Notifications & Lock */}
+          {/* Mobile Bottom Row: Month Selector + CURRENT PERIOD badge + Notifications & Lock */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8 }}>
             {/* Month Selector */}
             <TouchableOpacity
@@ -443,7 +429,31 @@ export const SpendlyHeader: React.FC<SpendlyHeaderProps> = ({
               />
             </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Current Period Badge per Stitch spec */}
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: colors.primaryLight,
+                borderColor: colors.primary,
+                borderWidth: 1,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: '800',
+                  color: colors.primary,
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Current Period
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {/* Bell Notifications */}
               <TouchableOpacity
                 style={[

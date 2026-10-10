@@ -9,7 +9,7 @@ export const migrationV1: Migration = {
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        type TEXT NOT NULL CHECK (type IN ('BANK_DEPOSIT', 'CREDIT_CARD')),
+        type TEXT NOT NULL CHECK (type IN ('BANK_DEPOSIT', 'CREDIT_CARD', 'PHYSICAL_WALLET')),
         balance REAL NOT NULL DEFAULT 0.0,
         credit_limit REAL,
         billing_cycle_cut_day INTEGER CHECK (billing_cycle_cut_day BETWEEN 1 AND 31),

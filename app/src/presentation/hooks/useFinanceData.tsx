@@ -103,6 +103,7 @@ export interface FinanceDataContextType {
   accounts: Account[];
   bankAccounts: Account[];
   creditCards: Account[];
+  physicalWallets: Account[];
   deletedAccounts: DeletedAccount[];
   transactions: Transaction[];
   deletedTransactions: Transaction[];
@@ -115,6 +116,8 @@ export interface FinanceDataContextType {
   userProfile: UserProfile;
   activeMonth: string;
   totalBankCash: number;
+  totalWalletCash: number;
+  totalLiquidCash: number;
   totalCreditDebt: number;
   totalReceivables: number;
   totalPayables: number;
@@ -762,8 +765,11 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Computations
   const bankAccounts = accounts.filter((a) => a.type === 'BANK_DEPOSIT');
   const creditCards = accounts.filter((a) => a.type === 'CREDIT_CARD');
+  const physicalWallets = accounts.filter((a) => a.type === 'PHYSICAL_WALLET');
 
   const totalBankCash = bankAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalWalletCash = physicalWallets.reduce((sum, a) => sum + a.balance, 0);
+  const totalLiquidCash = totalBankCash + totalWalletCash;
   const totalCreditDebt = creditCards.reduce((sum, a) => sum + a.balance, 0);
 
   const totalReceivables = debts
@@ -788,6 +794,7 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         accounts,
         bankAccounts,
         creditCards,
+        physicalWallets,
         deletedAccounts,
         transactions,
         deletedTransactions,
@@ -800,6 +807,8 @@ export const FinanceDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
         userProfile,
         activeMonth,
         totalBankCash,
+        totalWalletCash,
+        totalLiquidCash,
         totalCreditDebt,
         totalReceivables,
         totalPayables,

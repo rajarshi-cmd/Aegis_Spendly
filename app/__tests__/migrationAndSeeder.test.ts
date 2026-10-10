@@ -10,15 +10,16 @@ describe('Database Migrations and First-Launch Seeder', () => {
   test('Versioned migration runner executes pending migrations idempotently', async () => {
     const memDb = new MemoryDatabaseAdapter();
     const appliedFirst = await runMigrations(memDb);
-    expect(appliedFirst).toBe(2);
-    expect(memDb.store.schema_migrations.length).toBe(2);
+    expect(appliedFirst).toBe(3);
+    expect(memDb.store.schema_migrations.length).toBe(3);
     expect(memDb.store.schema_migrations[0].version).toBe(1);
     expect(memDb.store.schema_migrations[1].version).toBe(2);
+    expect(memDb.store.schema_migrations[2].version).toBe(3);
 
     // Running again should apply 0 migrations
     const appliedSecond = await runMigrations(memDb);
     expect(appliedSecond).toBe(0);
-    expect(memDb.store.schema_migrations.length).toBe(2);
+    expect(memDb.store.schema_migrations.length).toBe(3);
   });
 
   test('Seeder populates 1 bank, 2 credit cards (varying utilization), transactions, active debt, obligations, and investments', async () => {

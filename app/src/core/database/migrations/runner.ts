@@ -1,10 +1,12 @@
 import { DatabaseExecutor, Migration, MigrationRecord } from '../types';
 import { migrationV1 } from './v1_initial';
 import { migrationV2 } from './v2_upcoming_and_investments';
+import { migrationV3 } from './v3_physical_wallet';
 
 export const ALL_MIGRATIONS: Migration[] = [
   migrationV1,
   migrationV2,
+  migrationV3,
 ];
 
 export async function runMigrations(db: DatabaseExecutor): Promise<number> {

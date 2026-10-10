@@ -17,156 +17,129 @@ export const TabBar: React.FC<TabBarProps> = ({
   currentTab,
   onSelectTab,
   onOpenAddEntry,
-  onOpenProfile,
 }) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
+  const isHomeActive = currentTab === 'OVERVIEW';
+  const isAnalyticsActive = currentTab === 'ANALYTICS' || currentTab === 'TRANSACTIONS';
+  const isBudgetsActive = currentTab === 'BUDGETS';
+  const isFixedActive = currentTab === 'FIXED' || currentTab === 'PLAN_AHEAD';
+  const isToolsActive =
+    currentTab === 'TOOLS' || currentTab === 'BANKS' || currentTab === 'CREDIT_CARDS';
+
+  const tabs: {
+    key: ActiveTabKey;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    activeIcon: keyof typeof Ionicons.glyphMap;
+    isActive: boolean;
+  }[] = [
+    {
+      key: 'OVERVIEW',
+      label: 'Home',
+      icon: 'grid-outline',
+      activeIcon: 'grid',
+      isActive: isHomeActive,
+    },
+    {
+      key: 'ANALYTICS',
+      label: 'Analytics',
+      icon: 'stats-chart-outline',
+      activeIcon: 'stats-chart',
+      isActive: isAnalyticsActive,
+    },
+    {
+      key: 'BUDGETS',
+      label: 'Budget',
+      icon: 'pie-chart-outline',
+      activeIcon: 'pie-chart',
+      isActive: isBudgetsActive,
+    },
+    {
+      key: 'FIXED',
+      label: 'Fixed',
+      icon: 'time-outline',
+      activeIcon: 'time',
+      isActive: isFixedActive,
+    },
+    {
+      key: 'TOOLS',
+      label: 'Tools',
+      icon: 'wallet-outline',
+      activeIcon: 'wallet',
+      isActive: isToolsActive,
+    },
+  ];
+
   return (
     <View
       style={[
-        styles.tabBarContainer,
+        styles.navBarWrapper,
         {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.borderSubtle,
-          paddingBottom: Math.max(insets.bottom, 8),
+          backgroundColor: colors.background || '#051424',
+          borderTopColor: colors.borderSubtle || '#1c2b3c',
+          paddingBottom: Math.max(insets.bottom, 12),
           paddingLeft: Math.max(insets.left, 12),
           paddingRight: Math.max(insets.right, 12),
         },
       ]}
     >
-      <View style={styles.barRow}>
-        {/* 1. Expenses (Transactions / Expense Tracker) */}
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => onSelectTab('TRANSACTIONS')}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.iconWrap,
-              currentTab === 'TRANSACTIONS' && { backgroundColor: colors.primaryLight },
-            ]}
-          >
-            <Ionicons
-              name={currentTab === 'TRANSACTIONS' ? 'receipt' : 'receipt-outline'}
-              size={19}
-              color={currentTab === 'TRANSACTIONS' ? colors.primary : colors.textMuted}
-            />
-          </View>
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: currentTab === 'TRANSACTIONS' ? colors.primary : colors.textMuted },
-              currentTab === 'TRANSACTIONS' && { fontWeight: '700' },
-            ]}
-          >
-            Expenses
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.navRow}>
+        {/* Navigation Items (Left Segment) */}
+        <View style={styles.tabIconsGroup}>
+          {tabs.map((tab) => {
+            if (tab.isActive) {
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[
+                    styles.activePill,
+                    {
+                      backgroundColor: 'rgba(82, 183, 136, 0.14)',
+                      borderColor: 'rgba(82, 183, 136, 0.4)',
+                    },
+                  ]}
+                  onPress={() => onSelectTab(tab.key)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={tab.activeIcon} size={18} color="#52b788" />
+                  <Text style={[styles.activePillText, { color: '#52b788' }]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            }
 
-        {/* 2. Plan Ahead (Upcoming Commitments / Next Month) */}
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => onSelectTab('PLAN_AHEAD')}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.iconWrap,
-              currentTab === 'PLAN_AHEAD' && { backgroundColor: colors.primaryLight },
-            ]}
-          >
-            <Ionicons
-              name={currentTab === 'PLAN_AHEAD' ? 'calendar' : 'calendar-outline'}
-              size={19}
-              color={currentTab === 'PLAN_AHEAD' ? colors.primary : colors.textMuted}
-            />
-          </View>
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: currentTab === 'PLAN_AHEAD' ? colors.primary : colors.textMuted },
-              currentTab === 'PLAN_AHEAD' && { fontWeight: '700' },
-            ]}
-          >
-            Plan Ahead
-          </Text>
-        </TouchableOpacity>
-
-        {/* 3. Big Elevated Plus Button (Center Primary Action — TikTok Style) */}
-        <View style={styles.centerButtonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.bigPlusButton,
-              {
-                backgroundColor: colors.primary,
-                shadowColor: colors.primary,
-              },
-            ]}
-            onPress={onOpenAddEntry}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={30} color="#FFFFFF" />
-          </TouchableOpacity>
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.inactiveIconBtn}
+                onPress={() => onSelectTab(tab.key)}
+                activeOpacity={0.7}
+                accessibilityLabel={tab.label}
+              >
+                <Ionicons name={tab.icon} size={21} color={colors.textMuted || '#94a3b8'} />
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* 4. Cards (Credit Cards) */}
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => onSelectTab('CREDIT_CARDS')}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.iconWrap,
-              currentTab === 'CREDIT_CARDS' && { backgroundColor: colors.primaryLight },
-            ]}
-          >
-            <Ionicons
-              name={currentTab === 'CREDIT_CARDS' ? 'card' : 'card-outline'}
-              size={19}
-              color={currentTab === 'CREDIT_CARDS' ? colors.primary : colors.textMuted}
-            />
-          </View>
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: currentTab === 'CREDIT_CARDS' ? colors.primary : colors.textMuted },
-              currentTab === 'CREDIT_CARDS' && { fontWeight: '700' },
-            ]}
-          >
-            Cards
-          </Text>
-        </TouchableOpacity>
+        {/* Divider */}
+        <View style={[styles.verticalDivider, { backgroundColor: colors.surfaceVariant || '#273647' }]} />
 
-        {/* 5. Banks (Bank Accounts) */}
+        {/* Elevated Gradient FAB (+) */}
         <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => onSelectTab('BANKS')}
-          activeOpacity={0.7}
+          style={[
+            styles.fabButton,
+            {
+              backgroundColor: '#2d6a4f',
+              shadowColor: '#2d6a4f',
+            },
+          ]}
+          onPress={onOpenAddEntry}
+          activeOpacity={0.85}
+          accessibilityLabel="Add Transaction"
         >
-          <View
-            style={[
-              styles.iconWrap,
-              currentTab === 'BANKS' && { backgroundColor: colors.primaryLight },
-            ]}
-          >
-            <Ionicons
-              name={currentTab === 'BANKS' ? 'business' : 'business-outline'}
-              size={19}
-              color={currentTab === 'BANKS' ? colors.primary : colors.textMuted}
-            />
-          </View>
-          <Text
-            style={[
-              styles.tabLabel,
-              { color: currentTab === 'BANKS' ? colors.primary : colors.textMuted },
-              currentTab === 'BANKS' && { fontWeight: '700' },
-            ]}
-          >
-            Banks
-          </Text>
+          <Ionicons name="add" size={26} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -174,56 +147,71 @@ export const TabBar: React.FC<TabBarProps> = ({
 };
 
 const styles = StyleSheet.create({
-  tabBarContainer: {
+  navBarWrapper: {
     borderTopWidth: 1,
-    paddingTop: 6,
+    paddingTop: 8,
     position: 'relative',
-    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  barRow: {
+  navRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    maxWidth: 480,
     width: '100%',
-    maxWidth: 600,
     alignSelf: 'center',
   },
-  tabItem: {
+  tabIconsGroup: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
+    justifyContent: 'space-around',
+    paddingVertical: 2,
   },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+  activePill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+    shadowColor: '#52b788',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  activePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  inactiveIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
-    marginBottom: 2,
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  centerButtonContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    marginTop: -20, // Elevated TikTok style protrusion above the bar
   },
-  bigPlusButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
+  verticalDivider: {
+    width: 1,
+    height: 24,
+    marginHorizontal: 6,
+  },
+  fabButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
-    elevation: 8,
+    alignItems: 'center',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 6,
   },
 });

@@ -1,0 +1,226 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_stack" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#051424",
+            "surface-dim": "#051424",
+            "surface-bright": "#2c3a4c",
+            "surface-container-lowest": "#010f1f",
+            "surface-container-low": "#0d1c2d",
+            "surface-container": "#122131",
+            "surface-container-high": "#1c2b3c",
+            "surface-container-highest": "#273647",
+            "surface-variant": "#273647",
+            "background": "#051424",
+            "primary": "#4be277",
+            "primary-container": "#22c55e",
+            "on-primary": "#003915",
+            "on-primary-container": "#004b1e",
+            "secondary": "#ffca45",
+            "secondary-container": "#e4ae00",
+            "tertiary": "#ffb4ae",
+            "tertiary-container": "#ff8a83",
+            "error": "#ffb4ab",
+            "error-container": "#93000a",
+            "on-surface": "#d4e4fa",
+            "on-surface-variant": "#bccbb9",
+            "outline": "#869585",
+            "outline-variant": "#3d4a3d",
+            "inverse-surface": "#d4e4fa",
+            "inverse-on-surface": "#233143"
+          },
+          fontFamily: {
+            "display-hero": ["Inter"],
+            "display-hero-mobile": ["Inter"],
+            "headline-lg": ["Inter"],
+            "headline-md": ["Inter"],
+            "headline-sm": ["Inter"],
+            "body-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "body-sm": ["Inter"],
+            "label-lg": ["Inter"],
+            "label-md": ["Inter"],
+            "label-sm": ["Inter"],
+            "numeric-metric": ["Inter"]
+          },
+          fontSize: {
+            "display-hero": ["40px", { lineHeight: "48px", letterSpacing: "-0.03em", fontWeight: "700" }],
+            "display-hero-mobile": ["32px", { lineHeight: "40px", letterSpacing: "-0.025em", fontWeight: "700" }],
+            "headline-lg": ["28px", { lineHeight: "36px", letterSpacing: "-0.02em", fontWeight: "600" }],
+            "headline-md": ["22px", { lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "600" }],
+            "headline-sm": ["18px", { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "600" }],
+            "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+            "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+            "body-sm": ["13px", { lineHeight: "18px", fontWeight: "400" }],
+            "label-lg": ["14px", { lineHeight: "20px", letterSpacing: "0.01em", fontWeight: "600" }],
+            "label-md": ["12px", { lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "500" }],
+            "label-sm": ["11px", { lineHeight: "14px", letterSpacing: "0.04em", fontWeight: "600" }],
+            "numeric-metric": ["24px", { lineHeight: "28px", letterSpacing: "-0.02em", fontWeight: "700" }]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    @layer base {
+      html, body {
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        background-color: #051424;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface flex flex-col min-h-screen font-body-md">
+<!-- Header matching SCREEN_17 aesthetic -->
+<header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.25)]">
+<div class="h-16 px-4 flex items-center justify-between">
+<button aria-label="Go back" class="w-11 h-11 -ml-2 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors" onclick="window.history.back()" type="button">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Bank Accounts</span>
+<div class="flex items-center">
+<span class="font-label-sm text-label-sm text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full font-semibold">
+          Step 2 of 6
+        </span>
+</div>
+</div>
+<!-- Step Stepper Bar -->
+<div class="flex items-center gap-1.5 px-4 pb-2.5 w-full">
+<div class="flex-1 h-1 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex-1 h-1 rounded-full bg-primary relative overflow-hidden">
+<div class="absolute inset-0 bg-primary/40 animate-pulse"></div>
+</div>
+<div class="flex-1 h-1 rounded-full bg-surface-container-highest"></div>
+<div class="flex-1 h-1 rounded-full bg-surface-container-highest"></div>
+<div class="flex-1 h-1 rounded-full bg-surface-container-highest"></div>
+<div class="flex-1 h-1 rounded-full bg-surface-container-highest"></div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col relative w-full px-4 pt-24 pb-28 bg-surface space-y-4">
+<!-- Top Summary / Hero Card matching SCREEN_17 -->
+<div class="relative w-full rounded-2xl overflow-hidden bg-surface-container-low p-4 shadow-sm border border-outline-variant/20">
+<div class="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+<div class="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-secondary/5 blur-3xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col space-y-3">
+<!-- Status Pill & Count Tag -->
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider font-semibold">Liquidity Safety</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-variant/40 px-2.5 py-1 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">account_balance</span> 1 Linked
+          </span>
+</div>
+<!-- Headline Metric -->
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant">Total Liquid Cash</span>
+<div class="flex items-baseline space-x-2 mt-0.5">
+<span class="font-display-hero-mobile text-display-hero-mobile text-primary font-bold tracking-tight">₹1,45,000</span>
+<span class="font-label-md text-label-md text-primary/80 font-medium">available</span>
+</div>
+
+</div>
+<!-- Quick Summary Metrics Row in Cards -->
+
+</div>
+</div>
+<!-- Section Filter / Status Bar -->
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center space-x-2">
+<span class="font-label-lg text-label-lg font-semibold text-on-surface">Active Accounts</span>
+<span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full">1</span>
+</div>
+<div class="flex items-center gap-1.5">
+
+</div>
+</div>
+<!-- Account Card in SCREEN_17 List Card Style -->
+<div class="commitment-card group relative bg-surface-container rounded-2xl p-4 shadow-sm border border-outline-variant/20 hover:bg-surface-container-high transition-all overflow-hidden">
+<!-- Card Top Info -->
+<div class="flex items-start justify-between">
+<div class="flex items-start space-x-3">
+<div class="w-11 h-11 rounded-xl bg-surface-variant flex items-center justify-center shrink-0 text-primary">
+<span class="material-symbols-outlined text-[24px]">account_balance</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center space-x-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate">HDFC Bank</span>
+</div>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-md">Primary Salary A/c</span>
+
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">₹1,45,000.00</span>
+
+</div>
+</div>
+<!-- Mid Metrics & Buffer Bar Container -->
+<div class="mt-3.5 pt-3 bg-surface-container-low/60 rounded-xl p-3 flex flex-col space-y-2 border border-outline-variant/15">
+<div class="flex justify-between items-center text-on-surface-variant">
+<span class="font-label-md text-label-md flex items-center gap-1.5 text-on-surface">
+<span class="material-symbols-outlined text-[16px] text-primary">verified</span> Floor: ₹25,000 MAB
+          </span>
+
+</div>
+<!-- Progress / Buffer Bar -->
+<div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden flex items-center">
+<div class="bg-primary h-full rounded-full transition-all duration-500" style="width: 82%;"></div>
+</div>
+
+</div>
+<!-- Footer Actions inside Card -->
+
+</div>
+<!-- Dashed Add Another Bank Account Button Card -->
+<button class="w-full rounded-2xl border border-dashed border-outline-variant/50 hover:border-primary/50 bg-surface-container/30 hover:bg-surface-container/60 p-4 flex items-center justify-center space-x-2 text-on-surface-variant hover:text-primary transition-all group" type="button">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high group-hover:bg-primary/20 flex items-center justify-center text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</div>
+<span class="font-label-md text-label-md font-semibold text-on-surface group-hover:text-primary">+ Add Another Bank Account</span>
+</button>
+<!-- Ambient Compliance Card matching SCREEN_17's Bottom Action Card -->
+
+</main>
+<!-- Sticky Bottom Navigation CTA Bar -->
+<footer class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl border-t border-outline-variant/20 shadow-[0_-4px_16px_rgba(0,0,0,0.35)]">
+<div class="h-20 px-4 flex items-center justify-between gap-3">
+<button class="h-12 px-5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-lg text-label-lg transition-colors flex items-center justify-center" type="button">
+        Skip
+      </button>
+<button class="flex-1 h-12 rounded-xl bg-[#22c55e] hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_16px_rgba(34,197,94,0.35)] active:scale-[0.99]" type="button">
+<span>Continue to Credit Cards</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</footer>
+
+
+</body></html>

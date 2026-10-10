@@ -1,38 +1,70 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Animated,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../presentation/theme';
 import { useFinanceData } from '../../presentation/hooks/useFinanceData';
 import { formatRupee, formatCompactRupee } from '../../core/utils/currency';
 import { safeFormatDate, isDateInMonth } from '../../core/utils/date';
 import { Transaction } from '../../core/types/transactions';
+import { Account } from '../../core/types/accounts';
+import { FinancialCycleModal } from '../../presentation/components/modals/FinancialCycleModal';
+import { NotificationsModal } from '../../presentation/components/modals/NotificationsModal';
 
 interface OverviewScreenProps {
   onNavigateToTransactions: () => void;
   onNavigateToCards: () => void;
   onOpenAddEntry: () => void;
+  onOpenProfile?: () => void;
+  onOpenAddAccount?: () => void;
+  onEditAccount?: (acc: Account) => void;
 }
 
 export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   onNavigateToTransactions,
   onNavigateToCards,
   onOpenAddEntry,
+  onOpenProfile,
+  onOpenAddAccount,
+  onEditAccount,
 }) => {
   const { colors } = useTheme();
   const {
     accounts,
     transactions,
+    totalLiquidCash,
     totalBankCash,
+    totalWalletCash,
     totalCreditDebt,
     obligations,
+    investments,
+    portfolioMetrics,
     activeMonth,
     setActiveMonth,
+    plannedBudgets,
   } = useFinanceData();
 
-  // Selected category slice for interactive donut hover/tap
-  const [selectedCat, setSelectedCat] = useState<{ cat: string; pct: number; amt: number; color: string } | null>(null);
+  // Modals state
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  // Helper to identify Opening Balances (DEF-010)
+  // Micro toast state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
+  };
+
+  // Helper to identify Opening Balances
   const isOpeningBalance = (t: Transaction) => {
     const cat = (t.category || '').toLowerCase();
     const desc = (t.description || '').toLowerCase();
@@ -61,758 +93,818 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
     return transactions.filter((t) => isDateInMonth(t.timestamp, activeMonth));
   }, [transactions, activeMonth]);
 
-  // Calculations for selected active month (DEF-010: exclude opening balances from income and expenses)
-  const totalIncome = useMemo(() => {
-    return currentMonthTransactions
-      .filter((t) => t.type === 'INFLOW' && !isOpeningBalance(t))
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [currentMonthTransactions]);
-
+  // Total Outflow Expenses
   const totalExpenses = useMemo(() => {
     return currentMonthTransactions
       .filter((t) => t.type === 'OUTFLOW' && !isSavingsTx(t) && !isOpeningBalance(t))
       .reduce((sum, t) => sum + t.amount, 0);
   }, [currentMonthTransactions]);
 
-  const availableThisMonth = totalBankCash > 0 ? totalBankCash : Math.max(0, totalIncome - totalExpenses);
-  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100) : 0;
+  // Total Planned Budget
+  const totalAllocatedBudget = useMemo(() => {
+    return plannedBudgets.reduce((sum, b) => sum + b.planned_amount, 0) || 1;
+  }, [plannedBudgets]);
 
-  // Credit card for quick cycle widget
-  const regaliaCard = accounts.find((a) => a.type === 'CREDIT_CARD') || accounts[0];
-  const cardLimit = regaliaCard?.credit_limit || 52000;
-  const cardDebt = regaliaCard?.balance || 0;
-  const cardUtil = cardLimit > 0 ? Math.round((cardDebt / cardLimit) * 1000) / 10 : 0;
+  const budgetProgressPct = Math.min(
+    100,
+    Math.round((totalExpenses / totalAllocatedBudget) * 100)
+  );
 
-  // Real 12 Months bar chart data (DEF-014 & DEF-019)
-  const monthsData = useMemo(() => {
-    const activeYear = parseInt((activeMonth || '').match(/\d{4}/)?.[0] || new Date().getFullYear().toString(), 10);
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    const monthShorts = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    return monthNames.map((name, idx) => {
-      const fullMonthName = `${name} ${activeYear}`;
-      const shortName = monthShorts[idx];
-      const monthExpenses = transactions
-        .filter((t) =>
-          t.type === 'OUTFLOW' &&
-          !isSavingsTx(t) &&
-          !isOpeningBalance(t) &&
-          isDateInMonth(t.timestamp, fullMonthName)
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const isCurrent = activeMonth === fullMonthName;
-      return {
-        m: shortName,
-        fullName: fullMonthName,
-        val: monthExpenses,
-        current: isCurrent,
-      };
-    });
-  }, [transactions, activeMonth]);
-
-  const maxVal = Math.max(1, ...monthsData.map((d) => d.val));
-
-  // Category breakdown computed strictly from real transactions (DEF-013)
-  const categoryBreakdown = useMemo(() => {
-    const expenseTxs = currentMonthTransactions.filter(
-      (t) => t.type === 'OUTFLOW' && !isSavingsTx(t) && !isOpeningBalance(t)
-    );
-    const catTotals: Record<string, number> = {};
-    let sum = 0;
-
-    expenseTxs.forEach((t) => {
-      const c = t.category || 'Other';
-      catTotals[c] = (catTotals[c] || 0) + t.amount;
-      sum += t.amount;
-    });
-
-    if (sum === 0) return [];
-
-    const categoryColors: Record<string, string> = {
-      'Food & drinks': '#F59E0B',
-      'Home': '#10B981',
-      'Shopping': '#8B5CF6',
-      'Transport': '#0284C7',
-      'Bills & utilities': '#EF4444',
-      'Entertainment': '#EC4899',
-      'Investments': '#059669',
-      'Other': '#94A3B8',
-    };
-    const fallbackColors = ['#F59E0B', '#10B981', '#8B5CF6', '#0284C7', '#EF4444', '#EC4899', '#059669', '#94A3B8'];
-
-    return Object.entries(catTotals)
-      .map(([cat, amt], idx) => ({
-        cat,
-        amt,
-        pct: Math.round((amt / sum) * 100),
-        color: categoryColors[cat] || fallbackColors[idx % fallbackColors.length],
-      }))
-      .sort((a, b) => b.amt - a.amt);
+  // Recent 6 transactions
+  const recentTransactions = useMemo(() => {
+    return currentMonthTransactions.slice(0, 6);
   }, [currentMonthTransactions]);
 
-  // Compute CSS conic gradient for real pie/donut slices
-  const conicGradient = useMemo(() => {
-    const valid = categoryBreakdown.filter((item) => item.pct > 0);
-    if (valid.length === 0) return '#E2E8F0';
-    let accum = 0;
-    const stops: string[] = [];
-    for (const item of valid) {
-      const start = accum;
-      const end = Math.min(100, accum + item.pct);
-      accum = end;
-      stops.push(`${item.color} ${start}% ${end}%`);
-    }
-    if (accum < 100) {
-      stops.push(`#CBD5E1 ${accum}% 100%`);
-    }
-    return `conic-gradient(${stops.join(', ')})`;
-  }, [categoryBreakdown]);
+  // Account display helper
+  const getAccountName = (accountId: string) => {
+    const acc = accounts.find((a) => a.id === accountId);
+    return acc ? acc.name : 'Vault Account';
+  };
+
+  // Category Icon helper
+  const getCategoryIcon = (category: string, type: string): keyof typeof Ionicons.glyphMap => {
+    if (type === 'TRANSFER') return 'swap-horizontal';
+    const c = (category || '').toLowerCase();
+    if (c.includes('food') || c.includes('coffee') || c.includes('dining')) return 'cafe-outline';
+    if (c.includes('salary') || c.includes('income')) return 'briefcase-outline';
+    if (c.includes('grocer') || c.includes('shop')) return 'cart-outline';
+    if (c.includes('car') || c.includes('transport') || c.includes('fuel')) return 'car-outline';
+    if (c.includes('bill') || c.includes('utilities')) return 'flash-outline';
+    if (c.includes('invest') || c.includes('sip')) return 'trending-up-outline';
+    return 'card-outline';
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Top Demo Banner */}
-      <View style={[styles.demoBanner, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
-        <View style={styles.demoBannerLeft}>
-          <Ionicons name="sparkles" size={14} color="#B45309" style={{ marginRight: 8 }} />
-          <Text style={styles.demoBannerText}>
-            Air-gapped private ledger — all financial data persists locally on this physical device.
-          </Text>
-        </View>
-        <Ionicons name="shield-checkmark" size={14} color="#B45309" />
-      </View>
+    <View style={[styles.root, { backgroundColor: colors.background || '#051424' }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Period Selector & Quick Actions Bar */}
+        <View style={styles.periodRow}>
+          <TouchableOpacity
+            style={[
+              styles.monthPillBtn,
+              {
+                backgroundColor: colors.surfaceContainer || '#122131',
+                borderColor: colors.surfaceVariant || '#273647',
+              },
+            ]}
+            onPress={() => setIsCalendarOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar-outline" size={16} color="#52b788" />
+            <Text style={[styles.monthPillText, { color: colors.textPrimary || '#d4e4fa' }]}>
+              {activeMonth || 'Current Period'}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={colors.textMuted || '#94a3b8'} />
+          </TouchableOpacity>
 
-      {/* KPI Cards Row */}
-      <View style={styles.kpiRow}>
-        {/* Available this month */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.cardMint, borderColor: colors.cardMintBorder }]}>
-          <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>AVAILABLE IN {(activeMonth || 'THIS MONTH').toUpperCase()}</Text>
-            <Ionicons name="wallet-outline" size={16} color={colors.primary} />
-          </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{formatRupee(availableThisMonth)}</Text>
-          <Text style={[styles.kpiSub, { color: colors.successText }]}>Bank cash & liquid reserves</Text>
-        </View>
-
-        {/* Total Income (DEF-010: real income only) */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>TOTAL INCOME</Text>
-            <Ionicons name="cash-outline" size={16} color={colors.success} />
-          </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>
-            {formatRupee(totalIncome)}
-          </Text>
-          <Text style={[styles.kpiSub, { color: colors.textSecondary }]}>Salary, credits & earnings</Text>
-        </View>
-
-        {/* Total Expenses (DEF-010: real expenses only) */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.cardCream, borderColor: colors.cardCreamBorder }]}>
-          <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>TOTAL EXPENSES</Text>
-            <Ionicons name="arrow-up-circle-outline" size={16} color={colors.danger} />
-          </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>
-            {formatRupee(totalExpenses)}
-          </Text>
-          <Text style={[styles.kpiSub, { color: colors.dangerText }]}>Outflows & card spends</Text>
-        </View>
-
-        {/* Net Savings Rate */}
-        <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          <View style={styles.kpiTop}>
-            <Text style={[styles.kpiLabel, { color: colors.textMuted }]}>SAVINGS RATE</Text>
-            <Ionicons name="pie-chart-outline" size={16} color={colors.primary} />
-          </View>
-          <Text style={[styles.kpiAmount, { color: colors.textPrimary }]}>{savingsRate}%</Text>
-          <Text style={[styles.kpiSub, { color: colors.textMuted }]}>Net retained this month</Text>
-        </View>
-      </View>
-
-      {/* Middle Row: Monthly Expenses Bar Chart & Category Donut */}
-      <View style={styles.twoColRow}>
-        {/* Monthly Expenses Chart (DEF-014 & DEF-019: Real data, clickable bars) */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1.4 }]}>
-          <View style={styles.panelHeader}>
-            <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>MONTHLY EXPENSES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Real expense trends</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 11, color: colors.textMuted }}>Tap bar to switch month</Text>
-            </View>
-          </View>
-
-          <View style={styles.panelMetricRow}>
-            <Text style={[styles.panelBigNum, { color: colors.textPrimary }]}>{formatRupee(totalExpenses)}</Text>
-            <Text style={[styles.panelGrowthBadge, { color: colors.textSecondary }]}>Expenses in {activeMonth}</Text>
-          </View>
-
-          {/* Bar Chart */}
-          <View style={styles.chartContainer}>
-            <View style={styles.barsRow}>
-              {monthsData.map((d) => {
-                const heightPct = d.val > 0 ? Math.max(16, Math.round((d.val / maxVal) * 110)) : 6;
-                return (
-                  <TouchableOpacity
-                    key={d.fullName}
-                    style={styles.barCol}
-                    onPress={() => setActiveMonth(d.fullName)}
-                    activeOpacity={0.7}
-                  >
-                    {d.current && d.val > 0 && (
-                      <Text style={[styles.barTopLabel, { color: colors.warningText }]}>
-                        {formatCompactRupee(d.val)}
-                      </Text>
-                    )}
-                    <View
-                      style={[
-                        styles.barFill,
-                        {
-                          height: heightPct,
-                          backgroundColor: d.current
-                            ? '#F59E0B'
-                            : d.val > 0
-                            ? '#D1FAE5'
-                            : '#E2E8F0',
-                        },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.barXLabel,
-                        { color: d.current ? colors.textPrimary : colors.textMuted },
-                        d.current && { fontWeight: '700' },
-                      ]}
-                    >
-                      {d.m}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <View
+            style={[
+              styles.currentPeriodBadge,
+              {
+                backgroundColor: 'rgba(82, 183, 136, 0.12)',
+                borderColor: 'rgba(82, 183, 136, 0.3)',
+              },
+            ]}
+          >
+            <Text style={styles.currentPeriodText}>CURRENT PERIOD</Text>
           </View>
         </View>
 
-        {/* Where it Goes (Category Donut & Legend - DEF-013) */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
-          <View style={styles.panelHeader}>
-            <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>WHERE IT GOES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Spend by category</Text>
-            </View>
-          </View>
-
-          {categoryBreakdown.length === 0 ? (
-            <View style={{ padding: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="pie-chart-outline" size={40} color={colors.textMuted} style={{ marginBottom: 8 }} />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary }}>
-                No expenses in {activeMonth}
+        {/* Top Metric Bar: 3-column split card */}
+        <View style={[styles.topMetricCard, { backgroundColor: colors.surfaceContainer || '#122131' }]}>
+          <View style={styles.topMetricGrid}>
+            {/* 1. Liquid Net */}
+            <View style={[styles.metricColumn, { backgroundColor: colors.surfaceContainerLowest || '#010f1f' }]}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted || '#94a3b8' }]}>Liquid Net</Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary || '#d4e4fa' }]} numberOfLines={1}>
+                {formatRupee(totalLiquidCash)}
               </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 4 }}>
-                Debit transactions you log will automatically generate your category breakdown here.
-              </Text>
+              <View style={styles.metricMetaRow}>
+                <Ionicons name="shield-checkmark-outline" size={12} color="#52b788" />
+                <Text style={[styles.metricSubText, { color: '#52b788' }]}>Available</Text>
+              </View>
             </View>
-          ) : (
-            <View style={styles.donutRow}>
-              <View
-                style={[
-                  styles.donutRingBox,
-                  {
-                    // @ts-ignore
-                    backgroundImage: conicGradient,
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-                  },
-                ]}
-              >
+
+            {/* 2. Total Expenses with Progress Bar */}
+            <View style={[styles.metricColumn, { backgroundColor: colors.surfaceContainerLowest || '#010f1f' }]}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted || '#94a3b8' }]}>
+                Spent / {activeMonth ? activeMonth.split(' ')[0].substring(0, 3) : 'Month'}
+              </Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary || '#d4e4fa' }]} numberOfLines={1}>
+                {formatRupee(totalExpenses)}
+              </Text>
+              <View style={styles.progressBarBg}>
                 <View
                   style={[
-                    styles.donutInnerHole,
+                    styles.progressBarFill,
                     {
-                      backgroundColor: colors.surface,
+                      width: `${budgetProgressPct}%`,
+                      backgroundColor: budgetProgressPct > 90 ? '#ffb4ab' : '#ffca45',
                     },
                   ]}
-                >
-                  <Text
-                    style={[
-                      styles.donutCenterAmount,
-                      { color: selectedCat ? selectedCat.color : colors.textPrimary },
-                    ]}
-                  >
-                    {selectedCat ? formatCompactRupee(selectedCat.amt) : formatCompactRupee(totalExpenses)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.donutCenterLabel,
-                      { color: selectedCat ? colors.textPrimary : colors.textMuted },
-                      selectedCat && { fontWeight: '700' },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {selectedCat ? `${selectedCat.pct}% ${selectedCat.cat}` : 'expenses'}
-                  </Text>
-                </View>
+                />
               </View>
+            </View>
 
-              {/* Legend Column with Interactive Taps */}
-              <View style={styles.legendCol}>
-                {categoryBreakdown.map((item) => {
-                  const isSelected = selectedCat?.cat === item.cat;
-                  return (
-                    <TouchableOpacity
-                      key={item.cat}
-                      onPress={() => setSelectedCat(isSelected ? null : item)}
+            {/* 3. Investments / SIP */}
+            <View style={[styles.metricColumn, { backgroundColor: colors.surfaceContainerLowest || '#010f1f' }]}>
+              <Text style={[styles.metricLabel, { color: colors.textMuted || '#94a3b8' }]}>Invested / SIP</Text>
+              <Text style={[styles.metricValue, { color: colors.textPrimary || '#d4e4fa' }]} numberOfLines={1}>
+                {formatRupee(portfolioMetrics.totalInvested)}
+              </Text>
+              <View style={styles.metricMetaRow}>
+                <Ionicons name="pie-chart-outline" size={12} color="#52b788" />
+                <Text style={[styles.metricSubText, { color: '#52b788' }]}>Active</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Asset Carousel Section */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="wallet-outline" size={18} color="#52b788" />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary || '#d4e4fa' }]}>
+              Active Accounts & Cards
+            </Text>
+          </View>
+          <Text style={[styles.sectionCountText, { color: colors.textMuted || '#94a3b8' }]}>
+            {accounts.length} Assets
+          </Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+          snapToInterval={272}
+          decelerationRate="fast"
+        >
+          {accounts.map((acc) => {
+            if (acc.type === 'BANK_DEPOSIT') {
+              const isHealthy = (acc.minimum_balance || 0) <= acc.balance;
+              return (
+                <TouchableOpacity
+                  key={acc.id}
+                  style={[styles.carouselCard, { backgroundColor: colors.surfaceContainer || '#122131' }]}
+                  onPress={() => onEditAccount && onEditAccount(acc)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.cardIdentity}>
+                      <View style={[styles.cardIconBox, { backgroundColor: colors.surfaceContainerHigh || '#1c2b3c' }]}>
+                        <Ionicons name="business" size={17} color="#52b788" />
+                      </View>
+                      <View>
+                        <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {acc.name}
+                        </Text>
+                        <Text style={[styles.cardSubtype, { color: colors.textMuted }]}>Bank Account</Text>
+                      </View>
+                    </View>
+                    <View
                       style={[
-                        styles.legendItem,
-                        isSelected && {
-                          backgroundColor: '#F1F5F9',
-                          borderRadius: 6,
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
+                        styles.statusPill,
+                        {
+                          backgroundColor: isHealthy ? 'rgba(82, 183, 136, 0.15)' : 'rgba(255, 180, 171, 0.15)',
                         },
                       ]}
                     >
-                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                      <Text
-                        style={[
-                          styles.legendName,
-                          { color: isSelected ? colors.textPrimary : colors.textSecondary },
-                          isSelected && { fontWeight: '700' },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.cat}
-                      </Text>
-                      <Text style={[styles.legendPct, { color: colors.textMuted }]}>{item.pct}%</Text>
-                      <Text
-                        style={[
-                          styles.legendAmt,
-                          { color: isSelected ? item.color : colors.textPrimary },
-                        ]}
-                      >
-                        {formatCompactRupee(item.amt)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Bottom Row: Latest Entries (DEF-018: monthFilteredTransactions) & Current Cycles */}
-      <View style={styles.twoColRow}>
-        {/* Latest Entries for Active Month */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1.2 }]}>
-          <View style={styles.panelHeader}>
-            <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>LATEST ENTRIES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Recent transactions ({activeMonth})</Text>
-            </View>
-            <TouchableOpacity onPress={onNavigateToTransactions} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>View all</Text>
-              <Ionicons name="chevron-forward" size={13} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.txList}>
-            {currentMonthTransactions.length === 0 ? (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, color: colors.textMuted }}>No movements recorded for {activeMonth}.</Text>
-              </View>
-            ) : (
-              currentMonthTransactions.slice(0, 4).map((tx) => {
-                const isIncome = tx.type === 'INFLOW';
-                const acc = accounts.find((a) => a.id === tx.account_id);
-                return (
-                  <View key={tx.id} style={[styles.txRow, { borderBottomColor: colors.borderSubtle }]}>
-                    <View
-                      style={[
-                        styles.txIconBox,
-                        { backgroundColor: isIncome ? colors.cardMint : '#FEE2E2' },
-                      ]}
-                    >
-                      <Ionicons
-                        name={isIncome ? 'cash-outline' : 'cafe-outline'}
-                        size={18}
-                        color={isIncome ? colors.successText : colors.dangerText}
-                      />
-                    </View>
-
-                    <View style={styles.txDetails}>
-                      <Text style={[styles.txTitle, { color: colors.textPrimary }]}>{tx.description || tx.category}</Text>
-                      <Text style={[styles.txSub, { color: colors.textMuted }]}>
-                        {tx.category} • {acc?.name || 'Account'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.txRight}>
-                      <Text
-                        style={[
-                          styles.txAmount,
-                          { color: isIncome ? colors.successText : colors.textPrimary },
-                        ]}
-                      >
-                        {isIncome ? '+' : '-'}{formatRupee(tx.amount)}
-                      </Text>
-                      <Text style={[styles.txDate, { color: colors.textMuted }]}>
-                        {safeFormatDate(tx.timestamp, 'en-IN', { month: 'short', day: '2-digit' })}
+                      <Text style={[styles.statusPillText, { color: isHealthy ? '#52b788' : '#ffb4ab' }]}>
+                        {isHealthy ? 'Healthy' : 'Alert'}
                       </Text>
                     </View>
                   </View>
-                );
-              })
-            )}
+
+                  <View style={styles.cardMiddle}>
+                    <Text style={[styles.cardBalanceLabel, { color: colors.textMuted }]}>Available Cash</Text>
+                    <Text style={[styles.cardBalanceValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {formatRupee(acc.balance)}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.cardFooter, { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+                    <Text style={[styles.footerSubText, { color: colors.textMuted }]}>
+                      Min: {formatRupee(acc.minimum_balance || 0)}
+                    </Text>
+                    <Text style={[styles.footerActionText, { color: '#52b788' }]}>Manage</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            }
+
+            if (acc.type === 'CREDIT_CARD') {
+              const limit = acc.credit_limit || 50000;
+              const utilPct = Math.round((acc.balance / limit) * 100);
+              const isHigh = utilPct > 30;
+
+              return (
+                <TouchableOpacity
+                  key={acc.id}
+                  style={[styles.carouselCard, { backgroundColor: colors.surfaceContainer || '#122131' }]}
+                  onPress={() => onEditAccount && onEditAccount(acc)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.cardIdentity}>
+                      <View style={[styles.cardIconBox, { backgroundColor: colors.surfaceContainerHigh || '#1c2b3c' }]}>
+                        <Ionicons name="card" size={17} color="#ffca45" />
+                      </View>
+                      <View>
+                        <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {acc.name}
+                        </Text>
+                        <Text style={[styles.cardSubtype, { color: colors.textMuted }]}>
+                          Due {acc.payment_due_day || 20}th
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        {
+                          backgroundColor: isHigh ? 'rgba(255, 180, 171, 0.15)' : 'rgba(82, 183, 136, 0.15)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.statusPillText, { color: isHigh ? '#ffb4ab' : '#52b788' }]}>
+                        {isHigh ? `High ${utilPct}%` : `Safe ${utilPct}%`}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardMiddle}>
+                    <Text style={[styles.cardBalanceLabel, { color: colors.textMuted }]}>Pending Balance</Text>
+                    <Text style={[styles.cardBalanceValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {formatRupee(acc.balance)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cardProgressWrap}>
+                    <View style={styles.cardProgressHeader}>
+                      <Text style={[styles.cardLimitText, { color: colors.textMuted }]}>
+                        Limit {formatCompactRupee(limit)}
+                      </Text>
+                      <Text style={[styles.cardTargetText, { color: isHigh ? '#ffb4ab' : '#52b788' }]}>
+                        {isHigh ? '>30% Limit' : '<30% Target'}
+                      </Text>
+                    </View>
+                    <View style={styles.cardProgressBarBg}>
+                      <View
+                        style={[
+                          styles.cardProgressBarFill,
+                          {
+                            width: `${Math.min(100, utilPct)}%`,
+                            backgroundColor: isHigh ? '#ffb4ab' : '#52b788',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            }
+
+            // PHYSICAL_WALLET
+            return (
+              <TouchableOpacity
+                key={acc.id}
+                style={[styles.carouselCard, { backgroundColor: colors.surfaceContainer || '#122131' }]}
+                onPress={() => onEditAccount && onEditAccount(acc)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cardTopRow}>
+                  <View style={styles.cardIdentity}>
+                    <View style={[styles.cardIconBox, { backgroundColor: colors.surfaceContainerHigh || '#1c2b3c' }]}>
+                      <Ionicons name="cash" size={17} color="#ffca45" />
+                    </View>
+                    <View>
+                      <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {acc.name || 'Cash Wallet'}
+                      </Text>
+                      <Text style={[styles.cardSubtype, { color: colors.textMuted }]}>Physical Pocket</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: 'rgba(82, 183, 136, 0.15)' }]}>
+                    <Text style={[styles.statusPillText, { color: '#52b788' }]}>Active</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardMiddle}>
+                  <Text style={[styles.cardBalanceLabel, { color: colors.textMuted }]}>On-Hand Currency</Text>
+                  <Text style={[styles.cardBalanceValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {formatRupee(acc.balance)}
+                  </Text>
+                </View>
+
+                <View style={[styles.cardFooter, { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+                  <Text style={[styles.footerSubText, { color: colors.textMuted }]}>Physical Cash</Text>
+                  <Text style={[styles.footerActionText, { color: '#52b788' }]}>Adjust</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Add Account Card */}
+          {onOpenAddAccount && (
+            <TouchableOpacity
+              style={[
+                styles.carouselCard,
+                styles.addCardSlot,
+                {
+                  backgroundColor: colors.surfaceContainer || '#122131',
+                  borderColor: colors.borderSubtle || '#1c2b3c',
+                },
+              ]}
+              onPress={onOpenAddAccount}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.addCardIconBox, { backgroundColor: colors.surfaceContainerHigh || '#1c2b3c' }]}>
+                <Ionicons name="add" size={24} color="#52b788" />
+              </View>
+              <Text style={[styles.addCardTitle, { color: colors.textPrimary }]}>+ Add Tool</Text>
+              <Text style={[styles.addCardSub, { color: colors.textMuted }]}>Bank, Card or Wallet</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+
+        {/* Recent Activity Section */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="time-outline" size={18} color="#52b788" />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary || '#d4e4fa' }]}>
+              Recent Activity
+            </Text>
           </View>
+          <TouchableOpacity onPress={onNavigateToTransactions} activeOpacity={0.7}>
+            <Text style={[styles.viewAllBtn, { color: '#52b788' }]}>View All</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Current Billing Cycles */}
-        <View style={[styles.panelCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle, flex: 1 }]}>
-          <View style={styles.panelHeader}>
-            <View>
-              <Text style={[styles.panelMicro, { color: colors.textMuted }]}>CURRENT CYCLES</Text>
-              <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Upcoming dues</Text>
-            </View>
-            <TouchableOpacity onPress={onNavigateToCards} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>View cards</Text>
-              <Ionicons name="chevron-forward" size={13} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.cycleCardBox}>
-            <View style={styles.cycleTop}>
-              <View style={[styles.cardTag, { backgroundColor: colors.cardSkinEmerald }]}>
-                <Ionicons name="card-outline" size={14} color="#064E3B" style={{ marginRight: 4 }} />
-                <Text style={styles.cardTagText}>{regaliaCard?.name || 'Primary Card'}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7' }]}>
-                <Text style={[styles.statusBadgeText, { color: '#15803D' }]}>Healthy ({cardUtil}%)</Text>
-              </View>
-            </View>
-
-            <View style={styles.cycleDetailsRow}>
-              <View>
-                <Text style={[styles.cycleDetailLabel, { color: colors.textMuted }]}>Current Balance</Text>
-                <Text style={[styles.cycleDetailVal, { color: colors.textPrimary }]}>{formatRupee(cardDebt)}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.cycleDetailLabel, { color: colors.textMuted }]}>Credit Limit</Text>
-                <Text style={[styles.cycleDetailVal, { color: colors.textPrimary }]}>{formatRupee(cardLimit)}</Text>
-              </View>
-            </View>
-
-            {/* Visual utilization bar */}
-            <View style={[styles.utilTrack, { backgroundColor: colors.borderSubtle }]}>
-              <View
-                style={[
-                  styles.utilFill,
-                  {
-                    width: `${Math.min(100, cardUtil)}%`,
-                    backgroundColor: cardUtil > 30 ? colors.danger : colors.primary,
-                  },
-                ]}
-              />
-            </View>
-
-            <View style={styles.cycleFooter}>
-              <Text style={[styles.cycleFooterText, { color: colors.textMuted }]}>
-                Billing cut: {regaliaCard?.billing_cycle_cut_day || 15}th • Due: {regaliaCard?.payment_due_day || 5}th
+        {/* Activity Card List */}
+        <View style={[styles.activityListCard, { backgroundColor: colors.surfaceContainer || '#122131' }]}>
+          {recentTransactions.length === 0 ? (
+            <View style={styles.emptyActivityBox}>
+              <Ionicons name="receipt-outline" size={32} color={colors.textMuted || '#94a3b8'} />
+              <Text style={[styles.emptyActivityTitle, { color: colors.textPrimary }]}>No movements recorded</Text>
+              <Text style={[styles.emptyActivitySub, { color: colors.textMuted }]}>
+                Use the + action button to record a spend or credit.
               </Text>
             </View>
+          ) : (
+            recentTransactions.map((tx, idx) => {
+              const isIncome = tx.type === 'INFLOW';
+              const isTransfer = tx.type === 'TRANSFER';
+              const sign = isIncome ? '+' : isTransfer ? '' : '-';
+              const amountColor = isIncome ? '#52b788' : isTransfer ? colors.textPrimary : colors.textPrimary;
+              const iconName = getCategoryIcon(tx.category, tx.type);
+
+              return (
+                <View
+                  key={tx.id}
+                  style={[
+                    styles.activityRow,
+                    idx !== recentTransactions.length - 1 && [
+                      styles.activityRowBorder,
+                      { borderBottomColor: 'rgba(255,255,255,0.06)' },
+                    ],
+                  ]}
+                >
+                  <View style={styles.activityLeft}>
+                    <View
+                      style={[
+                        styles.activityIconBox,
+                        {
+                          backgroundColor: isIncome
+                            ? 'rgba(82, 183, 136, 0.15)'
+                            : 'rgba(255, 202, 69, 0.12)',
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={iconName}
+                        size={19}
+                        color={isIncome ? '#52b788' : '#ffca45'}
+                      />
+                    </View>
+                    <View style={styles.activityInfo}>
+                      <Text style={[styles.activityTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {tx.description || tx.category || 'Transaction'}
+                      </Text>
+                      <View style={styles.activitySubRow}>
+                        <View style={[styles.accountTag, { backgroundColor: colors.surfaceContainerHigh || '#1c2b3c' }]}>
+                          <Text style={[styles.accountTagText, { color: colors.textMuted }]}>
+                            {getAccountName(tx.account_id)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.activityDate, { color: colors.textMuted }]}>
+                          • {safeFormatDate(tx.timestamp)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.activityRight}>
+                    <Text style={[styles.activityAmount, { color: amountColor }]}>
+                      {sign}
+                      {formatRupee(tx.amount)}
+                    </Text>
+                    <Text style={[styles.activityCategoryText, { color: colors.textMuted }]}>
+                      {tx.category}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Floating Micro Toast */}
+      {toastMessage && (
+        <View style={styles.toastWrap}>
+          <View style={[styles.toastPill, { backgroundColor: colors.surfaceContainerHighest || '#273647' }]}>
+            <Ionicons name="checkmark-circle" size={18} color="#52b788" />
+            <Text style={[styles.toastText, { color: colors.textPrimary }]}>{toastMessage}</Text>
           </View>
         </View>
-      </View>
-    </ScrollView>
+      )}
+
+      {/* Financial Cycle Selector Modal */}
+      <FinancialCycleModal
+        visible={isCalendarOpen}
+        activeMonth={activeMonth}
+        onSelectMonth={(m) => {
+          setActiveMonth(m);
+          showToast(`Cycle updated to ${m}`);
+        }}
+        onClose={() => setIsCalendarOpen(false)}
+      />
+
+      {/* Notifications Drawer Modal */}
+      <NotificationsModal
+        visible={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    gap: 20,
+  root: {
+    flex: 1,
   },
-  demoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingTop: 12,
+    paddingBottom: 36,
   },
-  demoBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  demoBannerText: {
-    fontSize: 12,
-    color: '#92400E',
-    fontWeight: '500',
-  },
-  kpiRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  kpiCard: {
-    flex: 1,
-    minWidth: 160,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  kpiTop: {
+  periodRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  kpiLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  kpiAmount: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  kpiSub: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-  twoColRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  panelCard: {
-    padding: 18,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  panelHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  panelMicro: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  panelTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  viewAllText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginRight: 2,
-  },
-  panelMetricRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 10,
     marginBottom: 16,
   },
-  panelBigNum: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  panelGrowthBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chartContainer: {
-    height: 140,
-    justifyContent: 'flex-end',
-  },
-  barsRow: {
+  monthPillBtn: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 120,
-    paddingTop: 16,
-  },
-  barCol: {
     alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-end',
-    height: '100%',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  barTopLabel: {
-    fontSize: 9,
+  monthPillText: {
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 3,
   },
-  barFill: {
-    width: 14,
-    borderRadius: 4,
-    minHeight: 6,
+  currentPeriodBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  barXLabel: {
+  currentPeriodText: {
+    color: '#52b788',
     fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  topMetricCard: {
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  topMetricGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metricColumn: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  metricMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginTop: 6,
   },
-  donutRow: {
+  metricSubText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  progressBarBg: {
+    height: 4,
+    backgroundColor: '#1c2b3c',
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
-    marginTop: 8,
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 2,
   },
-  donutRingBox: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  donutInnerHole: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
-  },
-  donutCenterAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  donutCenterLabel: {
-    fontSize: 9,
-    marginTop: 1,
-  },
-  legendCol: {
-    flex: 1,
-    gap: 7,
-  },
-  legendItem: {
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  legendName: {
+  sectionCountText: {
     fontSize: 12,
-    flex: 1,
   },
-  legendPct: {
-    fontSize: 11,
-    width: 32,
-    textAlign: 'right',
-  },
-  legendAmt: {
+  viewAllBtn: {
     fontSize: 12,
-    fontWeight: '600',
-    width: 52,
-    textAlign: 'right',
-  },
-  txList: {
-    gap: 4,
-  },
-  txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  txIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  txDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  txTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  txSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  txRight: {
-    alignItems: 'flex-end',
-  },
-  txAmount: {
-    fontSize: 13,
     fontWeight: '700',
   },
-  txDate: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  cycleCardBox: {
+  carouselContainer: {
     gap: 12,
-    paddingTop: 4,
+    paddingBottom: 4,
+    marginBottom: 22,
   },
-  cycleTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  carouselCard: {
+    width: 260,
+    borderRadius: 20,
+    padding: 16,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  cardTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  cardTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#064E3B',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cycleDetailsRow: {
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  cycleDetailLabel: {
-    fontSize: 11,
+  cardIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
   },
-  cycleDetailVal: {
+  cardIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardName: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  cardSubtype: {
+    fontSize: 11,
     marginTop: 2,
   },
-  utilTrack: {
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  cardMiddle: {
+    marginVertical: 14,
+  },
+  cardBalanceLabel: {
+    fontSize: 11,
+  },
+  cardBalanceValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: -0.3,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  footerSubText: {
+    fontSize: 11,
+  },
+  footerActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardProgressWrap: {
+    marginTop: 2,
+  },
+  cardProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  cardLimitText: {
+    fontSize: 11,
+  },
+  cardTargetText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardProgressBarBg: {
     height: 6,
+    backgroundColor: '#1c2b3c',
     borderRadius: 3,
     overflow: 'hidden',
   },
-  utilFill: {
+  cardProgressBarFill: {
     height: '100%',
     borderRadius: 3,
   },
-  cycleFooter: {
+  addCardSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    minHeight: 160,
+  },
+  addCardIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  addCardSub: {
+    fontSize: 11,
     marginTop: 2,
   },
-  cycleFooterText: {
+  activityListCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  activityRowBorder: {
+    borderBottomWidth: 1,
+  },
+  activityLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  activityIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityInfo: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  activitySubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  accountTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  accountTagText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  activityDate: {
     fontSize: 11,
+  },
+  activityRight: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+  activityAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  activityCategoryText: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  emptyActivityBox: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    gap: 6,
+  },
+  emptyActivityTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  emptyActivitySub: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  toastWrap: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 99,
+  },
+  toastPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  toastText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

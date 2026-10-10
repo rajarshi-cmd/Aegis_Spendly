@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;min-height:100vh;margin:0;padding:0;background-color:#051424;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "tertiary-fixed-dim": "#ffb3ad", "surface-container-highest": "#273647", "primary-fixed": "#6bff8f", "on-secondary-fixed": "#251a00", "secondary-fixed": "#ffdf9a", "error-container": "#93000a", "surface-container-high": "#1c2b3c", "surface-container-low": "#0d1c2d", "secondary-fixed-dim": "#f7be1d", "on-primary-fixed-variant": "#005321", "surface-dim": "#051424", "on-primary-fixed": "#002109", "on-error-container": "#ffdad6", "inverse-on-surface": "#233143", "on-secondary-fixed-variant": "#5a4300", "primary-container": "#22c55e", "on-surface-variant": "#bccbb9", "on-surface": "#d4e4fa", "on-secondary": "#3f2e00", "error": "#ffb4ab", "on-tertiary-fixed": "#410004", "inverse-primary": "#006e2f", "on-background": "#d4e4fa", "surface-tint": "#4ae176", "inverse-surface": "#d4e4fa", "surface-variant": "#273647", "secondary-container": "#e4ae00", "surface-container-lowest": "#010f1f", "on-primary": "#003915", "secondary": "#ffca45", "on-secondary-container": "#5b4400", "tertiary-fixed": "#ffdad7", "background": "#051424", "tertiary": "#ffb4ae", "primary-fixed-dim": "#4ae176", "tertiary-container": "#ff8a83", "surface": "#051424", "on-tertiary-fixed-variant": "#930013", "on-tertiary-container": "#860011", "on-primary-container": "#004b1e", "surface-container": "#122131", "primary": "#4be277", "on-error": "#690005", "outline": "#869585", "on-tertiary": "#68000a", "outline-variant": "#3d4a3d", "surface-bright": "#2c3a4c" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-lg": "1rem", "gutter": "1rem", "space-xl": "1.5rem", "space-xs": "0.25rem", "gutter-sm": "0.75rem", "margin": "1rem", "space-md": "0.75rem", "space-sm": "0.5rem", "margin-tablet": "1.5rem" }, "fontFamily": { "numeric-metric": ["Inter"], "headline-md": ["Inter"], "label-lg": ["Inter"], "body-sm": ["Inter"], "label-sm": ["Inter"], "label-md": ["Inter"], "headline-lg": ["Inter"], "display-hero": ["Inter"], "headline-sm": ["Inter"], "body-lg": ["Inter"], "body-md": ["Inter"], "display-hero-mobile": ["Inter"] }, "fontSize": { "numeric-metric": ["24px", { "lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "display-hero": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "display-hero-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.025em", "fontWeight": "700" }] } } } }</script></head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.25)]"><div class="h-16 px-gutter flex items-center justify-between gap-space-sm"><div class="flex items-center gap-space-sm min-w-0 flex-1"><button aria-label="Go back" class="w-11 h-11 flex items-center justify-center rounded-xl bg-surface-container/60 text-on-surface hover:bg-surface-container-high transition-colors active:scale-95" onclick="history.back()" type="button"><span class="material-symbols-outlined text-[20px]">arrow_back_ios_new</span></button><h1 class="font-headline-sm text-headline-sm text-on-surface tracking-tight truncate">Vault Security Pin</h1></div><div class="flex items-center gap-space-sm flex-shrink-0"><div class="px-space-sm py-1 rounded-full bg-primary/10 text-primary font-label-sm text-label-sm tracking-wider uppercase flex items-center justify-center"><span class="w-1.5 h-1.5 rounded-full bg-primary mr-1.5 animate-pulse"></span>Step</div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full px-gutter pt-16 pb-safe bg-surface flex-1 min-h-[calc(100vh-4rem)]"><div class="flex flex-col w-full pb-6 space-y-4">
+<!-- Progress Stepper -->
+<div class="w-full bg-surface-container-low rounded-xl p-3 shadow-sm">
+<div class="flex items-center justify-between gap-1.5">
+<!-- Step 1 Complete -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm">1</span>
+</div>
+</div>
+<!-- Step 2 Complete -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm">2</span>
+</div>
+</div>
+<!-- Step 3 Complete -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm">3</span>
+</div>
+</div>
+<!-- Step 4 Complete -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm">4</span>
+</div>
+</div>
+<!-- Step 5 Complete -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary flex items-center justify-center"></div>
+<div class="flex items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-sm text-label-sm">5</span>
+</div>
+</div>
+<!-- Step 6 Active -->
+<div class="flex-1 flex flex-col items-center gap-1">
+<div class="w-full h-1.5 rounded-full bg-primary-container relative overflow-hidden">
+<div class="absolute inset-0 bg-primary opacity-75 animate-pulse"></div>
+</div>
+<div class="flex items-center gap-0.5 text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="font-label-sm text-label-sm">Final</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Header Section with Key Vault Visual -->
+<div class="flex flex-col items-center text-center px-2 pt-1">
+<div class="relative mb-3 flex items-center justify-center">
+<div class="absolute w-16 h-16 rounded-full bg-primary/20 blur-xl"></div>
+<div class="w-14 h-14 rounded-2xl bg-surface-container-high flex items-center justify-center shadow-lg relative">
+<span class="material-symbols-outlined text-primary text-[28px]" style="font-variation-settings: 'FILL' 1;">enhanced_encryption</span>
+</div>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface tracking-tight mb-1">Confirm Master PIN</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-[290px]">Re-enter your 4-digit master PIN to verify and lock your vault keys.</p>
+</div>
+<!-- Visual Wealth Metric & Verification Card -->
+<div class="w-full bg-surface-container rounded-2xl p-4 shadow-sm flex flex-col items-center space-y-3">
+<!-- Styled Dot Display -->
+<div class="flex items-center justify-center gap-5 py-2">
+<!-- Dot 1: Verified -->
+<div class="w-4 h-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_rgba(75,226,119,0.5)]">
+<span class="w-1.5 h-1.5 rounded-full bg-on-primary"></span>
+</div>
+<!-- Dot 2: Verified -->
+<div class="w-4 h-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_rgba(75,226,119,0.5)]">
+<span class="w-1.5 h-1.5 rounded-full bg-on-primary"></span>
+</div>
+<!-- Dot 3: Verified -->
+<div class="w-4 h-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_rgba(75,226,119,0.5)]">
+<span class="w-1.5 h-1.5 rounded-full bg-on-primary"></span>
+</div>
+<!-- Dot 4: Active Pulse -->
+<div class="w-4 h-4 rounded-full bg-surface-container-highest flex items-center justify-center relative">
+<span class="w-2.5 h-2.5 rounded-full bg-primary animate-ping opacity-60"></span>
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+</div>
+</div>
+<!-- Match Hash Status Pill -->
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm tracking-wide">PIN matches master key hash</span>
+</div>
+<!-- Live Entropy Meter -->
+<div class="w-full bg-surface-container-low rounded-xl p-2.5 flex items-center justify-between gap-3">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm text-on-surface truncate">Entropy Sealed</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant truncate">SHA-256 Derived</span>
+</div>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-1 h-3 rounded-full bg-primary"></span>
+<span class="w-1 h-3 rounded-full bg-primary"></span>
+<span class="w-1 h-3 rounded-full bg-primary"></span>
+<span class="w-1 h-3 rounded-full bg-primary"></span>
+</div>
+</div>
+</div>
+<!-- Security Notice Card -->
+<div class="w-full bg-surface-container-low rounded-xl p-3 flex items-start gap-2.5 shadow-sm">
+<div class="w-7 h-7 rounded-lg bg-surface-container-highest flex items-center justify-center flex-shrink-0 text-secondary">
+<span class="material-symbols-outlined text-[16px]">shield_person</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-0.5">Zero-Knowledge Architecture</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+        Your PIN is never stored or transmitted. If forgotten, your vault cannot be recovered and must be hard-reset.
+      </p>
+</div>
+</div>
+<!-- Tactile Numeric Keypad -->
+<div class="w-full grid grid-cols-3 gap-2 px-1 pt-1">
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>1</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5"> </span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>2</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">ABC</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>3</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">DEF</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>4</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">GHI</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>5</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">JKL</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>6</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">MNO</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>7</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">PQRS</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>8</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">TUV</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>9</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">WXYZ</span>
+</button>
+<!-- Biometrics Quick-Link -->
+<button aria-label="Use Passkey or Biometric" class="h-14 rounded-xl bg-surface-container-low hover:bg-surface-container active:bg-surface-container-high text-primary flex items-center justify-center transition-colors active:scale-95" type="button">
+<span class="material-symbols-outlined text-[24px]">fingerprint</span>
+</button>
+<button class="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-surface-container-highest text-on-surface font-numeric-metric text-numeric-metric flex flex-col items-center justify-center transition-colors active:scale-95 shadow-sm" type="button">
+<span>0</span>
+<span class="font-label-sm text-[9px] text-on-surface-variant uppercase tracking-widest leading-none mt-0.5">+</span>
+</button>
+<!-- Backspace Key -->
+<button aria-label="Delete last digit" class="h-14 rounded-xl bg-surface-container-low hover:bg-surface-container active:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors active:scale-95" type="button">
+<span class="material-symbols-outlined text-[24px]">backspace</span>
+</button>
+</div>
+<!-- Primary & Secondary Action Trays -->
+<div class="flex flex-col gap-2 pt-2">
+<button class="w-full h-12 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary font-label-lg text-label-lg flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(75,226,119,0.3)] transition-all active:scale-[0.98]" type="button">
+<span>Confirm &amp; Seal Vault</span>
+<span class="material-symbols-outlined text-[18px]">lock_open</span>
+</button>
+<button class="w-full h-11 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md flex items-center justify-center transition-colors active:scale-[0.98]" type="button">
+      Re-enter Initial PIN
+    </button>
+</div>
+</div></main></body></html>

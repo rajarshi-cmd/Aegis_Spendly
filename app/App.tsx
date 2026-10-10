@@ -10,12 +10,17 @@ import { SpendlySidebar, ActiveTabKey } from './src/presentation/components/Spen
 import { SpendlyHeader } from './src/presentation/components/SpendlyHeader';
 import { TabBar } from './src/presentation/components/TabBar';
 import { OverviewScreen } from './src/features/overview/OverviewScreen';
+import { AnalyticsScreen } from './src/features/analytics/AnalyticsScreen';
+import { BudgetsScreen } from './src/features/budgets/BudgetsScreen';
+import { FixedCostsScreen } from './src/features/fixed/FixedCostsScreen';
+import { ToolsScreen } from './src/features/tools/ToolsScreen';
 import { TransactionsScreen } from './src/features/transactions/TransactionsScreen';
 import { CreditCardsScreen } from './src/features/cards/CreditCardsScreen';
 import { BanksScreen } from './src/features/banks/BanksScreen';
 import { PlanAheadScreen } from './src/features/upcoming/PlanAheadScreen';
 import { InvestmentsScreen } from './src/features/investments/InvestmentsScreen';
 import { HistoryScreen } from './src/features/history/HistoryScreen';
+import { AddTransactionModal } from './src/presentation/components/modals/AddTransactionModal';
 import { AddEntryDrawer } from './src/presentation/components/drawers/AddEntryDrawer';
 import { AddCardDrawer } from './src/presentation/components/drawers/AddCardDrawer';
 import { AddBankDrawer } from './src/presentation/components/drawers/AddBankDrawer';
@@ -97,48 +102,45 @@ const MainNavigator: React.FC = () => {
       case 'OVERVIEW':
         return (
           <OverviewScreen
-            onNavigateToTransactions={() => setActiveTab('TRANSACTIONS')}
-            onNavigateToCards={() => setActiveTab('CREDIT_CARDS')}
+            onNavigateToTransactions={() => setActiveTab('ANALYTICS')}
+            onNavigateToCards={() => setActiveTab('TOOLS')}
             onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         );
+      case 'ANALYTICS':
       case 'TRANSACTIONS':
-        return <TransactionsScreen onOpenAddEntry={() => setIsAddEntryOpen(true)} />;
-      case 'CREDIT_CARDS':
         return (
-          <CreditCardsScreen
-            onOpenAddCard={() => setIsAddCardOpen(true)}
-            onEditCard={(card) => setEditingAccount(card)}
+          <AnalyticsScreen
+            onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         );
-      case 'BANKS':
+      case 'BUDGETS':
         return (
-          <BanksScreen
-            onOpenAddBank={() => setIsAddBankOpen(true)}
-            onEditBank={(bank) => setEditingAccount(bank)}
+          <BudgetsScreen
+            onOpenAddExpense={() => setIsAddEntryOpen(true)}
           />
         );
+      case 'FIXED':
       case 'PLAN_AHEAD':
         return (
-          <PlanAheadScreen
-            onOpenAddPlan={() => {
-              setPlanAheadTab('SUBSCRIPTION');
-              setIsPlanAheadOpen(true);
-            }}
-            onOpenAddBudget={() => {
-              setPlanAheadTab('BUDGET');
-              setIsPlanAheadOpen(true);
-            }}
+          <FixedCostsScreen
+            onOpenAddObligation={() => setIsAddEntryOpen(true)}
+          />
+        );
+      case 'TOOLS':
+      case 'CREDIT_CARDS':
+      case 'BANKS':
+        return (
+          <ToolsScreen
+            onOpenAddTool={() => setIsAddBankOpen(true)}
+            onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         );
       case 'INVESTMENTS':
         return (
-          <InvestmentsScreen
-            onOpenPlanSip={() => {
-              setPlanAheadTab('SIP');
-              setIsPlanAheadOpen(true);
-            }}
-            onOpenRecordContribution={() => setIsAddEntryOpen(true)}
+          <AnalyticsScreen
+            initialTab="INVESTMENTS"
+            onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         );
       case 'HISTORY':
@@ -146,8 +148,8 @@ const MainNavigator: React.FC = () => {
       default:
         return (
           <OverviewScreen
-            onNavigateToTransactions={() => setActiveTab('TRANSACTIONS')}
-            onNavigateToCards={() => setActiveTab('CREDIT_CARDS')}
+            onNavigateToTransactions={() => setActiveTab('ANALYTICS')}
+            onNavigateToCards={() => setActiveTab('TOOLS')}
             onOpenAddEntry={() => setIsAddEntryOpen(true)}
           />
         );
@@ -229,12 +231,15 @@ const MainNavigator: React.FC = () => {
       )}
 
       {/* Slide-Over Drawers & Modals */}
-      <AddEntryDrawer
+      <AddTransactionModal
         visible={isAddEntryOpen}
         accounts={accounts}
         onClose={() => setIsAddEntryOpen(false)}
         onSubmit={async (input) => {
           await addTransaction(input);
+        }}
+        onAddInvestment={async (input) => {
+          await addInvestment(input);
         }}
       />
 
@@ -276,6 +281,14 @@ const MainNavigator: React.FC = () => {
         accounts={accounts}
         onClose={() => setIsProfileOpen(false)}
         onUpdateProfile={updateProfile}
+        onNavigateToTools={() => {
+          setIsProfileOpen(false);
+          setActiveTab('TOOLS');
+        }}
+        onOpenSync={() => {
+          setIsProfileOpen(false);
+          setIsGoogleSyncOpen(true);
+        }}
         onOpenAddCard={() => {
           setIsProfileOpen(false);
           setIsAddCardOpen(true);

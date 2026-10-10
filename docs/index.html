@@ -3,503 +3,449 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aegis Spendly — Private Financial Vault & Expense Tracker</title>
-  <meta name="description" content="Zero-knowledge, air-gapped financial tracker for Android. Encrypted SQLite database, client-side PIN security, and ₹500-inspired minimalist design." />
+  <title>Aegis Spendly — Android App Download</title>
+  <meta name="description" content="Offline, zero-knowledge financial tracker and vault for Android." />
   <link rel="icon" type="image/png" href="./assets/spendly-logo.png" />
   <style>
     :root {
-      --bg-dark: #0A0E13;
-      --bg-surface: #101720;
-      --card-bg: rgba(18, 25, 34, 0.88);
-      --card-border: rgba(51, 65, 85, 0.6);
-      --card-border-glow: rgba(16, 185, 129, 0.3);
-      --currency-teal: #10B981;
-      --currency-teal-light: #34D399;
-      --currency-stone: #94A3B8;
-      --currency-silver: #F1F5F9;
-      --primary: #10B981;
-      --primary-hover: #059669;
-      --primary-glow: rgba(16, 185, 129, 0.35);
-      --text-main: #F8FAFC;
+      --bg: #051424;
+      --card-bg: #0D1C2D;
+      --card-subtle: #122131;
+      --border: #1C2B3C;
+      --primary: #52B788;
+      --primary-hover: #40916C;
+      --text-main: #D4E4FA;
       --text-muted: #94A3B8;
-      --amber: #F59E0B;
+      --text-dim: #64748B;
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
     }
 
     body {
-      background-color: var(--bg-dark);
-      background-image: 
-        radial-gradient(ellipse at 50% 0%, #1A282D 0%, #0F171D 50%, var(--bg-dark) 100%),
-        radial-gradient(rgba(16, 185, 129, 0.07) 1px, transparent 0);
-      background-size: 100% 100%, 28px 28px;
+      background-color: var(--bg);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 48px 20px 32px;
-      position: relative;
-      overflow-x: hidden;
-    }
-
-    /* Ambient Subtle Glow Behind Logo */
-    .glow-aura {
-      position: absolute;
-      top: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 280px;
-      height: 280px;
-      background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(20, 184, 166, 0.05) 50%, transparent 70%);
-      filter: blur(40px);
-      z-index: 0;
-      pointer-events: none;
+      padding: 40px 18px 48px;
     }
 
     .container {
       width: 100%;
-      max-width: 660px;
+      max-width: 620px;
       display: flex;
       flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
       align-items: center;
-      text-align: center;
-      position: relative;
-      z-index: 1;
+      gap: 16px;
+      padding-bottom: 8px;
     }
 
-    /* App Logo */
-    .logo-wrapper {
-      position: relative;
-      margin-bottom: 22px;
-      display: inline-block;
+    .logo-img {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
     }
 
-    .app-logo {
-      width: 108px;
-      height: 108px;
-      border-radius: 26px;
-      box-shadow: 
-        0 14px 34px rgba(0, 0, 0, 0.7),
-        0 0 24px rgba(16, 185, 129, 0.28),
-        inset 0 1px 1px rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(52, 211, 153, 0.35);
-      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
-      display: block;
+    .header-text h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.3px;
     }
 
-    .app-logo:hover {
-      transform: translateY(-4px) scale(1.03);
-      box-shadow: 
-        0 20px 40px rgba(0, 0, 0, 0.8),
-        0 0 32px rgba(16, 185, 129, 0.45);
+    .header-text p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
     }
 
-    /* Badge Pill */
-    .badge-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(52, 211, 153, 0.35);
-      color: var(--currency-teal-light);
-      padding: 6px 16px;
-      border-radius: 999px;
-      font-size: 11px;
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+    }
+
+    .card-title {
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.8px;
       text-transform: uppercase;
-      margin-bottom: 16px;
-      backdrop-filter: blur(8px);
-    }
-
-    .badge-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: var(--currency-teal-light);
-      box-shadow: 0 0 8px var(--currency-teal-light);
-    }
-
-    .logo-title {
-      font-size: 40px;
-      font-weight: 900;
-      letter-spacing: -1px;
-      margin-bottom: 12px;
-      background: linear-gradient(135deg, #FFFFFF 0%, #E2E8F0 45%, #6EE7B7 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .subtitle {
-      font-size: 15px;
       color: var(--text-muted);
-      line-height: 1.6;
-      margin-bottom: 30px;
-      max-width: 530px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    /* Primary Download Card */
-    .download-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 22px;
-      padding: 32px 28px;
-      width: 100%;
-      box-shadow: 
-        0 24px 48px rgba(0, 0, 0, 0.55),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      margin-bottom: 30px;
-      backdrop-filter: blur(14px);
-      position: relative;
-      overflow: hidden;
+    /* Main Download Card */
+    .version-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: var(--text-muted);
     }
 
-    .download-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--currency-teal-light), transparent);
-      opacity: 0.8;
+    .tag-badge {
+      background: rgba(82, 183, 136, 0.12);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 6px;
     }
 
-    .version-tag {
+    .btn-download-primary {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-    }
-
-    .version-badge {
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 3px 10px;
-      border-radius: 6px;
-      font-family: monospace;
-      font-size: 12px;
-      color: var(--currency-silver);
-      font-weight: 600;
-    }
-
-    .btn-download {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-      color: #FFFFFF;
+      background: var(--primary);
+      color: #051424;
       text-decoration: none;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      padding: 18px 32px;
-      border-radius: 14px;
+      padding: 15px 24px;
+      border-radius: 10px;
+      transition: background 0.18s ease;
       width: 100%;
-      transition: all 0.22s ease;
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    .btn-download:hover {
-      background: linear-gradient(135deg, #34D399 0%, #059669 100%);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.55);
+    .btn-download-primary:hover {
+      background: var(--primary-hover);
+      color: #FFFFFF;
     }
 
-    .btn-download:active {
-      transform: translateY(0);
-    }
-
-    .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      color: var(--text-main);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 13px 20px;
-      border-radius: 12px;
-      margin-top: 14px;
-      width: 100%;
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(52, 211, 153, 0.3);
-    }
-
-    /* Security Feature Cards */
-    .info-grid {
+    .meta-specs {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      width: 100%;
-      margin-bottom: 30px;
-      text-align: left;
-    }
-
-    @media (max-width: 600px) {
-      .info-grid {
-        grid-template-columns: 1fr;
-      }
-      .logo-title {
-        font-size: 32px;
-      }
-    }
-
-    .info-box {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 20px;
-      backdrop-filter: blur(10px);
-      transition: border-color 0.2s ease, transform 0.2s ease;
-    }
-
-    .info-box:hover {
-      border-color: rgba(52, 211, 153, 0.35);
-      transform: translateY(-2px);
-    }
-
-    .info-icon {
-      font-size: 20px;
-      margin-bottom: 8px;
-      display: inline-block;
-    }
-
-    .info-box h3 {
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 6px;
-      color: var(--text-main);
-    }
-
-    .info-box p {
+      gap: 10px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
       font-size: 12px;
-      color: var(--text-muted);
-      line-height: 1.55;
     }
 
-    /* Installation Guide Card */
-    .guide-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 26px;
-      width: 100%;
-      text-align: left;
-      margin-bottom: 32px;
-      backdrop-filter: blur(10px);
-    }
-
-    .guide-card h2 {
-      font-size: 17px;
-      font-weight: 800;
-      margin-bottom: 16px;
-      color: var(--text-main);
-    }
-
-    .step-list {
-      list-style: none;
-      counter-reset: steps;
+    .meta-item {
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 3px;
+    }
+
+    .meta-item span:first-child {
+      color: var(--text-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .meta-item span:last-child {
+      color: var(--text-main);
+      font-weight: 500;
+      font-family: monospace;
+    }
+
+    /* Installation Steps */
+    .steps-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .step-item {
-      counter-increment: steps;
       display: flex;
-      gap: 14px;
+      align-items: flex-start;
+      gap: 12px;
       font-size: 13px;
       line-height: 1.5;
-      color: var(--text-muted);
-    }
-
-    .step-item::before {
-      content: counter(steps);
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(52, 211, 153, 0.4);
-      color: var(--currency-teal-light);
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 800;
-      flex-shrink: 0;
-    }
-
-    .step-item strong {
       color: var(--text-main);
     }
 
-    .update-notice {
-      background: rgba(245, 158, 11, 0.08);
-      border: 1px solid rgba(245, 158, 11, 0.25);
-      border-radius: 12px;
-      padding: 14px;
-      margin-top: 18px;
-      font-size: 12px;
-      line-height: 1.55;
-      color: #FCD34D;
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      flex-shrink: 0;
+      margin-top: 1px;
     }
 
-    footer {
+    .note-text {
       font-size: 12px;
       color: var(--text-muted);
-      margin-top: auto;
-      padding-top: 20px;
+      background: var(--card-subtle);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border-left: 3px solid var(--primary);
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+
+    /* Older Builds */
+    .builds-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+
+    .build-row {
+      display: flex;
       align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      text-decoration: none;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .build-row:hover {
+      border-color: var(--primary);
+      background: rgba(82, 183, 136, 0.05);
+    }
+
+    .build-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .build-tag {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .build-date {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .build-dl-action {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Footer */
+    footer {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: 8px;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
     }
 
     footer a {
-      color: var(--currency-teal-light);
+      color: var(--text-muted);
       text-decoration: none;
-      transition: color 0.2s;
     }
 
     footer a:hover {
-      text-decoration: underline;
+      color: var(--primary);
     }
   </style>
 </head>
 <body>
-  <div class="glow-aura"></div>
-
   <div class="container">
-    <!-- App Logo -->
-    <div class="logo-wrapper">
-      <img src="./assets/spendly-logo.png" alt="Aegis Spendly App Logo" class="app-logo" />
-    </div>
+    <!-- Header -->
+    <header>
+      <img src="./assets/spendly-logo.png" alt="Aegis Spendly Logo" class="logo-img" />
+      <div class="header-text">
+        <h1>Aegis Spendly</h1>
+        <p>Private & Offline Personal Finance Tracker for Android</p>
+      </div>
+    </header>
 
-    <!-- Security Badge -->
-    <div class="badge-pill">
-      <span class="badge-dot"></span>
-      AIR-GAPPED OFFLINE VAULT &bull; ZERO CLOUD
-    </div>
-
-    <h1 class="logo-title">Aegis Spendly</h1>
-    <p class="subtitle">
-      Zero-knowledge personal finance tracker for physical Android devices. All data remains encrypted on your device with PBKDF2 key stretching, SQLite local storage, and TikTok-style ergonomics.
-    </p>
-
-    <!-- Main Download Card -->
-    <div class="download-card">
-      <div class="version-tag">
-        <span>Latest Release:</span>
-        <span class="version-badge" id="versionBadge">v1.2.0 (Build 7)</span>
-        <span>&bull;</span>
-        <span>Size: <span id="apkSizeTag">82.4 MB</span></span>
-        <span>&bull;</span>
-        <span>Package: <code>com.aegis.spendly</code></span>
+    <!-- Latest Release Download Card -->
+    <section class="card">
+      <div class="card-title">
+        <span>Latest Release</span>
+        <span class="tag-badge" id="tagBadge">v1.3.0 (Build 8)</span>
       </div>
 
-      <a id="downloadBtn" href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.2.0/spendly-release.apk" class="btn-download" download="spendly-release.apk">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <div class="version-meta">
+        <span>Channel: <strong>Stable Release</strong></span>
+        <span>&bull;</span>
+        <span>Size: <span id="apkSize">82.5 MB</span></span>
+        <span>&bull;</span>
+        <span>Database: <strong>Local SQLite</strong></span>
+      </div>
+
+      <a id="primaryDlBtn" href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.3.0/spendly-release.apk" class="btn-download-primary" download="spendly-release.apk">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download APK (Direct)
       </a>
 
-      <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/tag/v1.2.0" class="btn-secondary">
-        View Release Changelog on GitHub &rarr;
-      </a>
-    </div>
+      <div class="meta-specs">
+        <div class="meta-item">
+          <span>Package Name</span>
+          <span>com.aegis.spendly</span>
+        </div>
+        <div class="meta-item">
+          <span>Architectures</span>
+          <span>ARM64 / ARMv7 / x86_64</span>
+        </div>
+        <div class="meta-item">
+          <span>Target OS</span>
+          <span>Android 10+ (API 29–37)</span>
+        </div>
+        <div class="meta-item">
+          <span>Source Code</span>
+          <span><a href="https://github.com/rajarshi-cmd/Aegis_Spendly" style="color: var(--primary); text-decoration: none;">GitHub Repository</a></span>
+        </div>
+      </div>
+    </section>
 
-    <!-- Security & Architecture Features -->
-    <div class="info-grid">
-      <div class="info-box">
-        <span class="info-icon">🔒</span>
-        <h3>PBKDF2 Cryptographic Vault</h3>
-        <p>Master PIN key derivation with 10,000 hashing rounds, anti-tamper salt, and rate-limiting penalties.</p>
-      </div>
-      <div class="info-box">
-        <span class="info-icon">🛡️</span>
-        <h3>FLAG_SECURE Sandboxing</h3>
-        <p>Hardware-level window obfuscation blocks unauthorized screenshots and conceals cards in recent apps.</p>
-      </div>
-      <div class="info-box">
-        <span class="info-icon">⚡</span>
-        <h3>Auto-Delete Anti-Theft</h3>
-        <p>Configurable wipe threshold (3–10 failed PIN entries) safeguards against brute-force physical theft.</p>
-      </div>
-      <div class="info-box">
-        <span class="info-icon">💾</span>
-        <h3>Zero-Server Persistence</h3>
-        <p>Direct SQLite synchronous storage survives OS process termination without external network requests.</p>
-      </div>
-    </div>
-
-    <!-- Installation & Updating Instructions -->
-    <div class="guide-card">
-      <h2>How to Install & Update on Android</h2>
-      <ul class="step-list">
+    <!-- Installation Steps -->
+    <section class="card">
+      <div class="card-title">Installation & Updates</div>
+      <ul class="steps-list">
         <li class="step-item">
-          <div>
-            <strong>Download the APK</strong> by tapping the button above on your Android browser (Chrome, Brave, etc.).
-          </div>
+          <div class="step-num">1</div>
+          <div>Tap the <strong>Download APK</strong> button above directly on your Android phone.</div>
         </li>
         <li class="step-item">
-          <div>
-            <strong>Allow Unknown Apps:</strong> When prompted by Android, open <em>Settings</em> and toggle <em>Allow from this source</em> for your browser.
-          </div>
+          <div class="step-num">2</div>
+          <div>If prompted by Android, allow installation from your browser (Chrome/Brave Settings &rarr; <em>Allow from this source</em>).</div>
         </li>
         <li class="step-item">
-          <div>
-            <strong>Install / Update:</strong> Tap <em>Install</em>. For future updates, simply download the new APK from this page and tap <em>Update</em>.
-          </div>
+          <div class="step-num">3</div>
+          <div>Tap <strong>Install</strong> (or <strong>Update</strong>). Existing accounts, balances, and vault data will remain preserved.</div>
         </li>
       </ul>
-
-      <div class="update-notice">
-        <strong>💡 Updating Preserves Your Data:</strong> Installing updated APKs from this repository preserves all your existing accounts, cards, transactions, and security settings automatically without wiping your vault.
+      <div class="note-text">
+        🔒 <strong>Data Preservation:</strong> Installing updates preserves your local encrypted SQLite vault, PIN credentials, and accounts automatically.
       </div>
-    </div>
+    </section>
 
+    <!-- Older Builds / Version History -->
+    <section class="card">
+      <div class="card-title">
+        <span>Older Builds</span>
+        <span style="font-size: 11px; text-transform: none; color: var(--text-dim); font-weight: normal;">Previous releases</span>
+      </div>
+      <div class="builds-list" id="olderBuildsList">
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.2.0/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.2.0</span>
+            <span class="build-date">Build 7 • 82.4 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.5/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.5</span>
+            <span class="build-date">Build 6 • 82.1 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.4/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.4</span>
+            <span class="build-date">Build 5 • 82.0 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.3/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.3</span>
+            <span class="build-date">Build 4 • 81.8 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.2/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.2</span>
+            <span class="build-date">Build 3 • 81.7 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.1/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.1</span>
+            <span class="build-date">Build 2 • 81.5 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+
+        <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases/download/v1.0.0/spendly-release.apk" class="build-row" download>
+          <div class="build-info">
+            <span class="build-tag">v1.0.0</span>
+            <span class="build-date">Build 1 • 81.3 MB</span>
+          </div>
+          <span class="build-dl-action">Download &darr;</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
     <footer>
-      <div>Protected by PBKDF2 & SHA-256 Vault Architecture &bull; <a href="https://github.com/rajarshi-cmd/Aegis_Spendly">GitHub Repository</a></div>
-      <div style="font-size: 11px; opacity: 0.7;">Found a bug? <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/issues/new/choose">Report a Defect on GitHub</a></div>
+      <span>Zero-Knowledge • Air-Gapped • Local SQLite</span>
+      <span>&bull;</span>
+      <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/releases" target="_blank">Releases Changelog</a>
+      <span>&bull;</span>
+      <a href="https://github.com/rajarshi-cmd/Aegis_Spendly/issues" target="_blank">Report Issue</a>
     </footer>
   </div>
 
   <script>
-    // Dynamically resolve direct APK download URL from GitHub Releases API
+    // Dynamically check latest release asset size if available
     fetch('https://api.github.com/repos/rajarshi-cmd/Aegis_Spendly/releases/latest')
       .then(res => res.json())
       .then(data => {
         if (data.tag_name) {
-          const vBadge = document.getElementById('versionBadge');
-          if (vBadge) {
-            vBadge.textContent = `${data.tag_name} (Build 7)`;
+          const badge = document.getElementById('tagBadge');
+          if (badge && !badge.textContent.includes('v1.3.0')) {
+            badge.textContent = `${data.tag_name}`;
           }
         }
         if (data.assets && data.assets.length > 0) {
-          const apkAsset = data.assets.find(a => a.name.endsWith('.apk'));
-          if (apkAsset) {
-            const btn = document.getElementById('downloadBtn');
-            btn.href = apkAsset.browser_download_url;
-            if (apkAsset.size) {
-              const mb = (apkAsset.size / (1024 * 1024)).toFixed(1);
-              const sizeEl = document.getElementById('apkSizeTag');
+          const apk = data.assets.find(a => a.name.endsWith('.apk'));
+          if (apk) {
+            const btn = document.getElementById('primaryDlBtn');
+            btn.href = apk.browser_download_url;
+            if (apk.size) {
+              const mb = (apk.size / (1024 * 1024)).toFixed(1);
+              const sizeEl = document.getElementById('apkSize');
               if (sizeEl) sizeEl.textContent = mb + ' MB';
             }
           }

@@ -5,6 +5,10 @@ import { useTheme } from '../theme';
 
 export type ActiveTabKey =
   | 'OVERVIEW'
+  | 'ANALYTICS'
+  | 'BUDGETS'
+  | 'FIXED'
+  | 'TOOLS'
   | 'TRANSACTIONS'
   | 'CREDIT_CARDS'
   | 'BANKS'
@@ -33,13 +37,12 @@ export const SpendlySidebar: React.FC<SpendlySidebarProps> = ({
     icon: keyof typeof Ionicons.glyphMap;
     badge?: number;
   }[] = [
-    { key: 'OVERVIEW', label: 'Overview', icon: 'grid-outline' },
-    { key: 'TRANSACTIONS', label: 'Transactions', icon: 'list-outline' },
-    { key: 'CREDIT_CARDS', label: 'Credit cards', icon: 'card-outline' },
-    { key: 'BANKS', label: 'Banks', icon: 'business-outline' },
-    { key: 'PLAN_AHEAD', label: 'Plan ahead', icon: 'calendar-outline' },
-    { key: 'INVESTMENTS', label: 'Investments', icon: 'trending-up-outline' },
-    { key: 'HISTORY', label: 'History', icon: 'reload-outline', badge: deletedCount > 0 ? deletedCount : undefined },
+    { key: 'OVERVIEW', label: 'Dashboard', icon: 'grid-outline' },
+    { key: 'ANALYTICS', label: 'Analytics', icon: 'stats-chart-outline' },
+    { key: 'BUDGETS', label: 'Budgets', icon: 'pie-chart-outline' },
+    { key: 'FIXED', label: 'Fixed Costs', icon: 'time-outline' },
+    { key: 'TOOLS', label: 'Financial Tools', icon: 'wallet-outline' },
+    { key: 'HISTORY', label: 'Archive', icon: 'archive-outline', badge: deletedCount > 0 ? deletedCount : undefined },
   ];
 
   return (

@@ -30,8 +30,8 @@ export class AccountingEngine {
       throw new Error('Transaction amount must be strictly greater than zero.');
     }
 
-    if (account.type === 'BANK_DEPOSIT') {
-      // Liquid Deposit Accounts: Inflows increment available balance; outflows decrement available balance.
+    if (account.type === 'BANK_DEPOSIT' || account.type === 'PHYSICAL_WALLET') {
+      // Liquid Deposit & Physical Cash: Inflows increment available balance; outflows decrement available balance.
       if (type === 'INFLOW') {
         return Number((account.balance + amount).toFixed(2));
       } else {
@@ -161,7 +161,7 @@ export class AccountingEngine {
         if (oldAccount) {
           // Revert old transaction on old account
           let revertedBalance = oldAccount.balance;
-          if (oldAccount.type === 'BANK_DEPOSIT') {
+          if (oldAccount.type === 'BANK_DEPOSIT' || oldAccount.type === 'PHYSICAL_WALLET') {
             revertedBalance = existing.type === 'INFLOW'
               ? Number((oldAccount.balance - existing.amount).toFixed(2))
               : Number((oldAccount.balance + existing.amount).toFixed(2));

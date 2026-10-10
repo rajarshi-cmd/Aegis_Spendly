@@ -49,6 +49,7 @@ export interface ThemeColors {
   surfaceVariant?: string;
   outline?: string;
   outlineVariant?: string;
+  secondary?: string;
 }
 
 export const THEME_PRESETS: Record<ThemePresetName, ThemeColors> = {

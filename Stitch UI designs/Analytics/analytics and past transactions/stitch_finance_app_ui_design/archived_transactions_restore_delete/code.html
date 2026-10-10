@@ -1,0 +1,237 @@
+<!DOCTYPE html><html class="dark" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_stack" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#051424;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-fixed": "#ffdf9a", "inverse-on-surface": "#233143", "on-secondary-container": "#5b4400", "surface-dim": "#051424", "surface-container-low": "#0d1c2d", "tertiary-fixed": "#ffdad7", "on-tertiary-fixed-variant": "#930013", "on-surface-variant": "#bccbb9", "tertiary-container": "#ff8a83", "surface": "#051424", "on-primary-fixed-variant": "#005321", "on-tertiary": "#68000a", "on-primary-fixed": "#002109", "on-primary-container": "#004b1e", "outline": "#869585", "surface-bright": "#2c3a4c", "inverse-surface": "#d4e4fa", "inverse-primary": "#006e2f", "tertiary-fixed-dim": "#ffb3ad", "on-error-container": "#ffdad6", "secondary-container": "#e4ae00", "on-background": "#d4e4fa", "on-surface": "#d4e4fa", "error": "#ffb4ab", "on-primary": "#003915", "surface-container-lowest": "#010f1f", "primary-container": "#22c55e", "error-container": "#93000a", "background": "#051424", "outline-variant": "#3d4a3d", "on-secondary": "#3f2e00", "surface-container-high": "#1c2b3c", "tertiary": "#ffb4ae", "on-secondary-fixed": "#251a00", "secondary-fixed-dim": "#f7be1d", "surface-container-highest": "#273647", "surface-tint": "#4ae176", "on-tertiary-container": "#860011", "on-secondary-fixed-variant": "#5a4300", "primary-fixed": "#6bff8f", "primary-fixed-dim": "#4ae176", "surface-variant": "#273647", "on-tertiary-fixed": "#410004", "on-error": "#690005", "surface-container": "#122131", "secondary": "#ffca45", "primary": "#4be277" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter": "1rem", "margin-tablet": "1.5rem", "margin": "1rem", "space-xl": "1.5rem", "space-md": "0.75rem", "space-lg": "1rem", "gutter-sm": "0.75rem", "space-xs": "0.25rem", "space-sm": "0.5rem" }, "fontFamily": { "body-lg": ["Inter"], "numeric-metric": ["Inter"], "label-lg": ["Inter"], "body-sm": ["Inter"], "headline-lg": ["Inter"], "display-hero-mobile": ["Inter"], "display-hero": ["Inter"], "label-sm": ["Inter"], "headline-md": ["Inter"], "body-md": ["Inter"], "label-md": ["Inter"], "headline-sm": ["Inter"] }, "fontSize": { "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "numeric-metric": ["24px", { "lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }], "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "display-hero-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.025em", "fontWeight": "700" }], "display-hero": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600" }] } } } }</script></head><body class="bg-surface text-on-surface font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary selection:text-on-primary"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.24)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm min-w-0"><button aria-label="Go back" class="w-11 h-11 -ml-space-xs rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors focus:outline-none" onclick="history.back()"><span class="material-symbols-outlined text-[24px]">arrow_back</span></button><h1 class="font-headline-sm text-headline-sm text-on-surface truncate">Archived Transactions</h1></div><div class="flex items-center justify-end pl-space-sm flex-shrink-0"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full px-margin pt-16 pb-safe bg-surface min-h-screen"><div class="flex flex-col w-full pb-8">
+<!-- Informational Callout Banner -->
+<div class="w-full bg-surface-container-low rounded-xl p-space-lg mb-space-lg shadow-sm">
+<div class="flex items-start gap-space-md">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 text-secondary">
+<span class="material-symbols-outlined text-[20px]">info</span>
+</div>
+<div class="flex-1 min-w-0">
+<h2 class="font-label-lg text-label-lg text-on-surface mb-0.5">Budget Exclusion Notice</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          Archived items are excluded from budget calculations. You can restore or permanently delete them.
+        </p>
+</div>
+</div>
+</div>
+<!-- Segmented Controls / Filter Tabs -->
+<div class="w-full bg-surface-container-lowest p-1 rounded-full mb-space-lg flex items-center shadow-inner">
+<button class="flex-1 flex items-center justify-center gap-space-xs py-2 px-space-md rounded-full text-on-surface-variant hover:text-on-surface transition-all" id="tab-active" onclick="handleTabSwitch('active')" type="button">
+<span class="font-label-md text-label-md">Active</span>
+<span class="bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm px-2 py-0.5 rounded-full">8</span>
+</button>
+<button class="flex-1 flex items-center justify-center gap-space-xs py-2 px-space-md rounded-full bg-surface-container-high text-primary shadow-sm transition-all" id="tab-archived" onclick="handleTabSwitch('archived')" type="button">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">archive</span>
+<span class="font-label-md text-label-md font-semibold">Archived</span>
+<span class="bg-primary/20 text-primary font-label-sm text-label-sm px-2 py-0.5 rounded-full font-bold" id="archive-count-badge">3</span>
+</button>
+</div>
+<!-- Section Metric Header -->
+<div class="flex items-center justify-between mb-space-md px-1">
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-outline">Archived Entries</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Total Excluded: <span class="font-semibold text-on-surface">₹870.00</span></span>
+</div>
+<!-- Transaction List Container -->
+<div class="flex flex-col gap-space-md w-full" id="archived-list">
+<!-- Card 1: Expanded Action Card -->
+<div class="w-full bg-surface-container-low rounded-xl p-space-lg shadow-md transition-all duration-300" id="card-starbucks">
+<div class="flex items-start justify-between gap-space-md mb-space-md">
+<div class="flex items-center gap-space-md min-w-0">
+<div class="w-11 h-11 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 text-on-surface">
+<span class="material-symbols-outlined text-[22px]">coffee</span>
+</div>
+<div class="min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Starbucks Coffee</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+<span>Paid via HDFC Reserve</span>
+</p>
+</div>
+</div>
+<div class="text-right flex-shrink-0">
+<span class="font-numeric-metric text-numeric-metric text-on-surface">-₹450.00</span>
+<p class="font-label-sm text-label-sm text-outline mt-0.5">Nov 22</p>
+</div>
+</div>
+<!-- Detail Context Pill & Note -->
+<div class="bg-surface-container-lowest rounded-lg p-space-md mb-space-lg flex flex-col gap-1.5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[15px] text-secondary">inventory_2</span>
+<span class="font-label-sm text-label-sm text-secondary">Archived on Nov 22, 2024</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant pl-6 italic">
+          “Cancelled team coffee order”
+        </p>
+</div>
+<!-- Action Bar -->
+<div class="grid grid-cols-2 gap-space-sm pt-space-xs">
+<button class="flex items-center justify-center gap-1.5 py-3 px-space-md bg-surface-container-highest hover:bg-surface-bright text-primary rounded-lg transition-colors font-label-lg text-label-lg shadow-sm" onclick="restoreItem('card-starbucks', 'Starbucks Coffee', 450)" type="button">
+<span class="material-symbols-outlined text-[18px]">settings_backup_restore</span>
+<span>Restore</span>
+</button>
+<button class="flex items-center justify-center gap-1.5 py-3 px-space-md bg-error-container/20 hover:bg-error-container/30 text-error rounded-lg transition-colors font-label-lg text-label-lg" onclick="promptPermanentDelete('card-starbucks', 'Starbucks Coffee')" type="button">
+<span class="material-symbols-outlined text-[18px]">delete_forever</span>
+<span>Delete</span>
+</button>
+</div>
+</div>
+<!-- Card 2: Zomato Food Delivery -->
+<div class="w-full bg-surface-container-low rounded-xl p-space-md shadow-sm transition-all duration-300" id="card-zomato">
+<div class="flex items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-md min-w-0">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 text-on-surface">
+<span class="material-symbols-outlined text-[20px]">delivery_dining</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface truncate">Zomato Food Delivery</h4>
+<div class="flex items-center gap-1 text-on-surface-variant font-body-sm text-body-sm">
+<span>-₹280.00</span>
+<span class="text-outline">•</span>
+<span>ICICI Credit</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mt-0.5">Archived on Nov 15</p>
+</div>
+</div>
+<!-- Quick Inline Actions -->
+<div class="flex items-center gap-1.5 flex-shrink-0">
+<button aria-label="Restore Zomato transaction" class="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary flex items-center justify-center transition-colors" onclick="restoreItem('card-zomato', 'Zomato Food Delivery', 280)" type="button">
+<span class="material-symbols-outlined text-[19px]">settings_backup_restore</span>
+</button>
+<button aria-label="Delete Zomato transaction permanently" class="w-10 h-10 rounded-full bg-surface-container-high hover:bg-error-container/30 text-error flex items-center justify-center transition-colors" onclick="promptPermanentDelete('card-zomato', 'Zomato Food Delivery')" type="button">
+<span class="material-symbols-outlined text-[19px]">delete_forever</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Card 3: Chaayos Chai Point -->
+<div class="w-full bg-surface-container-low rounded-xl p-space-md shadow-sm transition-all duration-300" id="card-chaayos">
+<div class="flex items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-md min-w-0">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 text-on-surface">
+<span class="material-symbols-outlined text-[20px]">local_cafe</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface truncate">Chaayos Chai Point</h4>
+<div class="flex items-center gap-1 text-on-surface-variant font-body-sm text-body-sm">
+<span>-₹140.00</span>
+<span class="text-outline">•</span>
+<span>Cash</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mt-0.5">Archived on Nov 08</p>
+</div>
+</div>
+<!-- Quick Inline Actions -->
+<div class="flex items-center gap-1.5 flex-shrink-0">
+<button aria-label="Restore Chaayos transaction" class="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary flex items-center justify-center transition-colors" onclick="restoreItem('card-chaayos', 'Chaayos Chai Point', 140)" type="button">
+<span class="material-symbols-outlined text-[19px]">settings_backup_restore</span>
+</button>
+<button aria-label="Delete Chaayos transaction permanently" class="w-10 h-10 rounded-full bg-surface-container-high hover:bg-error-container/30 text-error flex items-center justify-center transition-colors" onclick="promptPermanentDelete('card-chaayos', 'Chaayos Chai Point')" type="button">
+<span class="material-symbols-outlined text-[19px]">delete_forever</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Empty State (Hidden initially) -->
+<div class="hidden flex-col items-center justify-center text-center py-12 px-space-lg bg-surface-container-low rounded-xl my-space-md" id="empty-state">
+<div class="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center mb-space-md text-primary">
+<span class="material-symbols-outlined text-[32px]">transform</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Archive is Clean</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-xs mb-space-lg">
+      No archived transactions remaining in Food &amp; Dining. All records are currently active or purged.
+    </p>
+<button class="px-space-lg py-2.5 bg-primary text-on-primary rounded-full font-label-lg text-label-lg shadow-md flex items-center gap-2" onclick="handleTabSwitch('active')" type="button">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+<span>View Active Transactions</span>
+</button>
+</div>
+<!-- Bottom SQLite Vault Info Pill -->
+<div class="mt-space-xl p-space-md bg-surface-container-lowest rounded-xl flex items-center gap-space-md shadow-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0 text-outline">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-tight">
+<strong class="text-on-surface font-semibold">Local-only:</strong> Purged transactions cannot be recovered once permanently deleted from your encrypted vault.
+    </p>
+</div>
+<!-- Interactive Feedback Toast (Dynamically Shown) -->
+<div class="fixed bottom-6 left-margin right-margin z-50 bg-surface-container-highest text-on-surface p-space-md rounded-xl shadow-xl flex items-center justify-between gap-space-md translate-y-24 opacity-0 transition-all duration-300 pointer-events-none" id="action-toast">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="material-symbols-outlined text-primary text-[20px]" id="toast-icon">check_circle</span>
+<span class="font-label-md text-label-md truncate" id="toast-message">Transaction updated</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline flex-shrink-0">Dismiss</span>
+</div>
+</div>
+<script>
+  let remainingArchived = 3;
+
+  function showToast(message, isDestructive = false) {
+    const toast = document.getElementById('action-toast');
+    const toastMsg = document.getElementById('toast-message');
+    const toastIcon = document.getElementById('toast-icon');
+
+    if (!toast) return;
+
+    toastMsg.textContent = message;
+    if (isDestructive) {
+      toastIcon.textContent = 'delete';
+      toastIcon.className = 'material-symbols-outlined text-error text-[20px]';
+    } else {
+      toastIcon.textContent = 'check_circle';
+      toastIcon.className = 'material-symbols-outlined text-primary text-[20px]';
+    }
+
+    toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    setTimeout(() => {
+      toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+      toast.classList.remove('translate-y-0', 'opacity-100');
+    }, 2800);
+  }
+
+  function decrementCounter() {
+    remainingArchived = Math.max(0, remainingArchived - 1);
+    const badge = document.getElementById('archive-count-badge');
+    if (badge) badge.textContent = remainingArchived;
+
+    if (remainingArchived === 0) {
+      const list = document.getElementById('archived-list');
+      const empty = document.getElementById('empty-state');
+      if (list) list.classList.add('hidden');
+      if (empty) {
+        empty.classList.remove('hidden');
+        empty.classList.add('flex');
+      }
+    }
+  }
+
+  function restoreItem(cardId, merchant, amount) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    card.classList.add('opacity-0', '-translate-x-full');
+    setTimeout(() => {
+      card.remove();
+      decrementCounter();
+      showToast(`Restored "${merchant}" (₹${amount}) to budget`);
+    }, 250);
+  }
+
+  function promptPermanentDelete(cardId, merchant) {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    card.classList.add('opacity-0', 'scale-95');
+    setTimeout(() => {
+      card.remove();
+      decrementCounter();
+      showToast(`Permanently purged "${merchant}" from local vault`, true);
+    }, 250);
+  }
+
+  function handleTabSwitch(tabName) {
+    showToast(tabName === 'active' ? 'Switching to Active Transactions (8)...' : 'Already in Archived View');
+  }
+</script></main></body></html>

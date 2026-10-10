@@ -108,4 +108,51 @@ describe('AccountingEngine & Double-Entry Ingestion Rules', () => {
     expect(updatedSource?.balance).toBe(800.0); // 1000 - 200
     expect(updatedCard?.balance).toBe(300.0); // 500 debt - 200 repayment
   });
+
+  test('Physical wallet: Inflows increment cash and Outflows decrement cash', () => {
+    const cashWallet: Account = {
+      id: 'wallet-1',
+      name: 'Cash in Pocket',
+      type: 'PHYSICAL_WALLET',
+      balance: 500.0,
+      credit_limit: null,
+      billing_cycle_cut_day: null,
+      payment_due_day: null,
+      minimum_balance: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    expect(AccountingEngine.calculateNewBalance(cashWallet, 'INFLOW', 200.0)).toBe(700.0);
+    expect(AccountingEngine.calculateNewBalance(cashWallet, 'OUTFLOW', 150.0)).toBe(350.0);
+  });
+
+  test('ATM Cash Withdrawal: Transfer from Bank to Physical Wallet increments wallet and decrements bank', async () => {
+    const memDb = new MemoryDatabaseAdapter();
+    const bank = await createAccount(memDb, {
+      name: 'HDFC Savings',
+      type: 'BANK_DEPOSIT',
+      balance: 10000.0,
+    });
+    const wallet = await createAccount(memDb, {
+      name: 'Physical Wallet',
+      type: 'PHYSICAL_WALLET',
+      balance: 500.0,
+    });
+
+    const tx = await AccountingEngine.ingestTransaction(memDb, {
+      account_id: bank.id,
+      destination_account_id: wallet.id,
+      type: 'TRANSFER',
+      amount: 2000.0,
+      category: 'ATM Cash Withdrawal',
+    });
+
+    expect(tx.type).toBe('TRANSFER');
+    const updatedBank = memDb.store.accounts.find((a) => a.id === bank.id);
+    const updatedWallet = memDb.store.accounts.find((a) => a.id === wallet.id);
+
+    expect(updatedBank?.balance).toBe(8000.0);
+    expect(updatedWallet?.balance).toBe(2500.0);
+  });
 });

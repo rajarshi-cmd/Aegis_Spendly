@@ -86,7 +86,7 @@
 
 | ID | GitHub Issue | Component | Scope | Severity | Status |
 | :--- | :---: | :--- | :--- | :---: | :---: |
-| **ENH-002** | [#32](https://github.com/rajarshi-cmd/Aegis_Spendly/issues/32) | `OnboardingScreen.tsx` | Step 5 Security: Auto Lock toggle switch knob translation symmetry (`translateX: 18` -> `translateX: 22` on ON state) | Low | 📋 Backlog |
+| **ENH-002** | [#32](https://github.com/rajarshi-cmd/Aegis_Spendly/issues/32) | `OnboardingScreen.tsx` | Step 5 Security: Auto Lock toggle switch knob translation symmetry (`translateX: 18` -> `translateX: 22` on ON state) | Low | 🟢 Resolved |
 
 ---
 

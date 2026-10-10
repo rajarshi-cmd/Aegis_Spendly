@@ -1463,7 +1463,7 @@ export const OnboardingScreen: React.FC = () => {
                   <View
                     style={[
                       styles.toggleKnob,
-                      { transform: [{ translateX: autoLockOnBlur ? 18 : 2 }] },
+                      { transform: [{ translateX: autoLockOnBlur ? 22 : 2 }] },
                     ]}
                   />
                 </View>
@@ -1549,7 +1549,7 @@ export const OnboardingScreen: React.FC = () => {
                   <View
                     style={[
                       styles.toggleKnob,
-                      { transform: [{ translateX: autoDeleteOnFailedPin ? 18 : 2 }] },
+                      { transform: [{ translateX: autoDeleteOnFailedPin ? 22 : 2 }] },
                     ]}
                   />
                 </View>
